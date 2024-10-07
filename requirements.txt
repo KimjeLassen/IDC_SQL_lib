@@ -1,0 +1,4 @@
+sqlalchemy
+connect
+pymysql
+python-dotenv

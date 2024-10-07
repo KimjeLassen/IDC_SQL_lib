@@ -1,8 +1,8 @@
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, DeclarativeBase
 import connect
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
 
 engine = connect.engine()
 Session = sessionmaker(bind=engine)
