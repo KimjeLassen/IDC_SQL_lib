@@ -1,7 +1,6 @@
-# some_file.py
 import sys
-# caution: path[0] is reserved for script path (or '' in REPL)
-sys.path.insert(1, 'models')
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from models import rolegroup_model
 
