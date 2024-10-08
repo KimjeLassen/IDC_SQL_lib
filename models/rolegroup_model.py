@@ -6,12 +6,12 @@ class RoleGroup(Base):
     id = Column(String, primary_key=True)
     name = Column(String)
     description = Column(String)
-    user_only = Column(SmallInteger)
-    ou_inherit_allowed = Column(SmallInteger)
-    last_updated_by = Column(String)
-    last_updated = Column(DateTime)
-    created_by = Column(String)
-    bitmap = Column(Integer)
+   # user_only = Column(SmallInteger)
+   # ou_inherit_allowed = Column(SmallInteger)
+   # last_updated_by = Column(String)
+   # last_updated = Column(DateTime)
+   # created_by = Column(String)
+   # bitmap = Column(Integer)
 
 def print_group_name_and_desc():
     result = session.query(RoleGroup.name, RoleGroup.description).all()
