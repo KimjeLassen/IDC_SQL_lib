@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, SmallInteger, TIMESTAMP
 from db_base import Base, session
 
 class UserRole(Base):
-    __tablename__ = 'userrole'
+    __tablename__ = 'user_roles'
     id = Column(String, primary_key=True)
     name = Column(String)
     identifier = Column(String)
@@ -16,3 +16,9 @@ class UserRole(Base):
     created_by = Column(String)
     created = Column(TIMESTAMP)
     bitmap = Column(Integer)
+
+def get_id_name_identifier(user_role_id: str):
+    result = session.query(UserRole.name, UserRole.identifier).filter(UserRole.id == user_role_id).all()   
+    session.close()
+    for name, identifier in result:
+        print(f"Role name: {name}, Identifier: {identifier}, ID: {user_role_id}")

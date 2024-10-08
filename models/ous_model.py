@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, SmallInteger, TIMESTAMP, BigInteger, JSON, ForeignKey
 from db_base import Base, session
+from collections.abc import Sequence
 
 class Ous(Base):
     __tablename__ = 'ous'
@@ -18,3 +19,12 @@ class Ous(Base):
     origin_created = Column(TIMESTAMP)
     origin_last_updated = Column(TIMESTAMP)
     bitmap = Column(Integer)
+
+
+def get_name_and_ids(pos: Sequence[positions]):
+    for position in pos:
+        print(f"Position name: {position.name}, Identifier: {position.id}")
+    result = session.query(Ous.id, Ous.name).all()
+    session.close()
+    #for id, name in result:
+        #print(f"Rolegroup name: {name}, Identifier: {id}")
