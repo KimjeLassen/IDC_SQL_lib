@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, Column, String, SmallInteger, JSON, DateTime
+from sqlalchemy import Integer, Column, String, SmallInteger, JSON, TIMESTAMP
 from db_base import Base, session
 
 class User(Base):
@@ -15,9 +15,9 @@ class User(Base):
     phone = Column(String)
     dn = Column(String)
     meta_data = Column(JSON)
-    created = Column(DateTime)
-    last_updated = Column(DateTime)
-    origin_created = Column(DateTime)
-    origin_last_updated = Column(DateTime)
+    created = Column(TIMESTAMP)
+    last_updated = Column(TIMESTAMP)
+    origin_created = Column(TIMESTAMP)
+    origin_last_updated = Column(TIMESTAMP)
     origin_bitmap = Column(Integer)
     bitmap = Column(Integer)

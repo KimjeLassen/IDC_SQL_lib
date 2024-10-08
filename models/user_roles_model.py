@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, SmallInteger, DateTime
+from sqlalchemy import Column, Integer, String, SmallInteger, TIMESTAMP
 from db_base import Base, session
 
 class UserRole(Base):
@@ -12,7 +12,7 @@ class UserRole(Base):
     ou_inherit_allowed = Column(SmallInteger)
     delegated_from_cvr = Column(String)
     last_updated_by = Column(String)
-    last_updated = Column(DateTime)
+    last_updated = Column(TIMESTAMP)
     created_by = Column(String)
-    created = Column(DateTime)
+    created = Column(TIMESTAMP)
     bitmap = Column(Integer)
