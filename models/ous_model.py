@@ -24,8 +24,9 @@ class Ous(Base):
 def get_name_and_ids(posList: list):
     resultSeq : list = []
     for pos in posList:
-        result = session.query(Ous).where(Ous.id == pos.ou_id).first()
-        if result not in resultSeq:
-            resultSeq.append(result)
+        result = session.query(Ous).where(Ous.id == pos.ou_id).all()
+        for res in result:
+            if res not in resultSeq:
+                resultSeq.append(res)
     session.close()
     return resultSeq
