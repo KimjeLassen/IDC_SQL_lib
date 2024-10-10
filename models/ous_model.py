@@ -21,10 +21,11 @@ class Ous(Base):
     bitmap = Column(Integer)
 
 
-def get_name_and_ids(pos: Sequence[positions]):
-    for position in pos:
-        print(f"Position name: {position.name}, Identifier: {position.id}")
-    result = session.query(Ous.id, Ous.name).all()
+def get_name_and_ids(posList: list):
+    resultSeq : list = []
+    for pos in posList:
+        result = session.query(Ous).where(Ous.id == pos.ou_id).first()
+        if result not in resultSeq:
+            resultSeq.append(result)
     session.close()
-    #for id, name in result:
-        #print(f"Rolegroup name: {name}, Identifier: {id}")
+    return resultSeq

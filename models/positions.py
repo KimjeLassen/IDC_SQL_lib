@@ -21,8 +21,9 @@ class Positions(Base):
     origin_last_updated = Column(TIMESTAMP)
     bitmap = Column(Integer)
 
-def get_name_ids_template():
-    result = session.query(Positions.name, Positions.id, Positions.template_type, Positions.ou_id).all()
+def get_name_ids_template(amount):
+    result : list = [Positions]
+    result = session.query(Positions).limit(amount).all()
     session.close()
     return result
     #for name, id, template_type in result:
