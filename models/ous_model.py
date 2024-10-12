@@ -1,6 +1,5 @@
 from sqlalchemy import Column, Integer, String, SmallInteger, TIMESTAMP, BigInteger, JSON, ForeignKey
 from db_base import Base, session
-from collections.abc import Sequence
 
 class Ous(Base):
     __tablename__ = 'ous'

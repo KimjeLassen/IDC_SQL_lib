@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, SmallInteger, DateTime, JSON, TIMESTAMP, ForeignKey
+from sqlalchemy import Column, String, ForeignKey
 from db_base import Base, session
 
 class PositionRoles(Base):

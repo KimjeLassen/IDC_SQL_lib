@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, SmallInteger, DateTime
+from sqlalchemy import Column, String
 from db_base import Base, session
 
 class RoleGroup(Base):
