@@ -1,4 +1,6 @@
 sqlalchemy
 connect
 pymysql
+jupyter
+ipykernel
 python-dotenv
