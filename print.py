@@ -1,15 +1,13 @@
 import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(1, 'models')
 
-from models import position_roles, user_roles_model, ous_model, positions
-from sqlalchemy.orm import DeclarativeBase
+from models import positions_model, user_roles_model, ous_model
 
-pos = positions.get_all_positions(0)
+pos = positions_model.get_all_positions(10)
 ous = ous_model.get_name_and_ids(pos)
 originalList = pos.copy()
 all_all_roles = []
-positions.map_positions_to_ou(ous, pos)
+positions_model.map_positions_to_ou(ous, pos)
 #for ou in ous:
 #    belongTo : list = []
 #    print(f"OU Name: {ou.name}, OU ID: {ou.id}")
@@ -39,3 +37,5 @@ positions.map_positions_to_ou(ous, pos)
 #user_role_id = position_roles.get_user_role_from_position('22a8b2e9-b367-1909-62f8-a3bec3368efb')
 #
 #user_roles_model.get_id_name_identifier(user_role_id.user_role_id)
+def hello_world():
+    return"Hello World"
