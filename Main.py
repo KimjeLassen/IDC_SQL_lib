@@ -7,6 +7,8 @@ pos = positions_model.get_all_positions(10)
 ous = ous_model.get_name_and_ids(pos)
 originalList = pos.copy()
 all_all_roles = []
+for positions in pos:
+    print(f"Position name: {positions.name}, ou_id: {positions.ou_id}")
 positions_model.map_positions_to_ou(ous, pos)
 #for ou in ous:
 #    belongTo : list = []
