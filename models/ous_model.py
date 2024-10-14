@@ -1,6 +1,5 @@
 from sqlalchemy import Column, Integer, String, SmallInteger, TIMESTAMP, BigInteger, JSON, ForeignKey
 from db_base import Base, session
-from collections.abc import Sequence
 
 class Ous(Base):
     __tablename__ = 'ous'
@@ -21,14 +20,12 @@ class Ous(Base):
     bitmap = Column(Integer)
 
 
-def get_name_and_ids(pos: Sequence):
-    resultSeq = []
-    for position in pos:
-        result = session.query(Ous.id, Ous.name).where(Ous.id == position.ou_id).all()
-        if result not in resultSeq:
-            resultSeq.append(result)   
+def get_name_and_ids(posList: list):
+    resultSeq : list = []
+    for pos in posList:
+        result = session.query(Ous).where(Ous.id == pos.ou_id).all()
+        for res in result:
+            if res not in resultSeq:
+                resultSeq.append(res)
     session.close()
-    #for result in resultSeq:
-    #    for id, name in result:
-    #        print(f"ID: {id}, Name: {name}")
     return resultSeq

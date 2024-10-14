@@ -21,11 +21,25 @@ class Positions(Base):
     origin_last_updated = Column(TIMESTAMP)
     bitmap = Column(Integer)
 
-def get_name_ids_template(amount : float):
+def get_all_positions(amount):
     result : list = [Positions]
-    result = session.query(Positions).limit(amount).all()
+    if (amount == 0):
+        result = session.query(Positions).all()
+    else:
+        result = session.query(Positions).limit(amount).all()
     session.close()
     #for name, ou_id in result:
 #        print(f"Position name: {name}, ou_id: {ou_id}")
     return result
 
+def map_positions_to_ou(ous : list, positions : list):
+    dict_var = {}
+    if len(positions) == 0:
+        positions = get_all_positions(0)
+    for ou in ous:
+        dict_var[ou.id] = []
+        for position in positions:
+            if position.ou_id == ou.id:
+                dict_var[ou.id].append(position)
+                positions.remove(position)
+    return dict_var

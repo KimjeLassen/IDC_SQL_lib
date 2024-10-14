@@ -17,8 +17,7 @@ class UserRole(Base):
     created = Column(TIMESTAMP)
     bitmap = Column(Integer)
 
-def get_id_name_identifier(user_role_id: str):
-    result = session.query(UserRole.name, UserRole.identifier).filter(UserRole.id == user_role_id).all()   
+def get_group_from_id(id : str):
+    result = session.query(UserRole).where(UserRole.id == id).first()
     session.close()
-    for name, identifier in result:
-        print(f"Role name: {name}, Identifier: {identifier}, ID: {user_role_id}")
+    return result

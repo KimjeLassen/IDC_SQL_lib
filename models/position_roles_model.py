@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, SmallInteger, DateTime, JSON, TIMESTAMP, ForeignKey
+from sqlalchemy import Column, String, ForeignKey
 from db_base import Base, session
 
 class PositionRoles(Base):
@@ -6,7 +6,7 @@ class PositionRoles(Base):
     position_id = Column(String, ForeignKey('positions.id'), primary_key=True)
     user_role_id = Column(String, ForeignKey('userrole.id'), primary_key=True)
 
-def get_user_role_from_position(position_id : str): 
-    result = session.query(PositionRoles).where(PositionRoles.position_id == position_id).first()
+def get_position_role_from_position(position_id : str): 
+    result = session.query(PositionRoles).where(PositionRoles.position_id == position_id).all()
     session.close()
     return result

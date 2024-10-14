@@ -1,21 +1,41 @@
 import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(1, 'models')
 
-from models import position_roles, user_roles_model, ous_model, positions
+from models import positions_model, user_roles_model, ous_model
 
-pos = positions.get_name_ids_template(10)
+pos = positions_model.get_all_positions(10)
 ous = ous_model.get_name_and_ids(pos)
-for ou in ous:
-    for id, name in ou:
-        print(f"ID: {id}, Name: {name} with positions:")
-        subset_of_A = set([id]) # the subset of A
-        results = [a for a in pos if a.ou_id in subset_of_A]
-        for res in results:
-           urID = position_roles.get_user_role_from_position(res.id)
-           if (urID is not None):
-                print(f"Position: {res.name}, User Role ID: {urID.user_role_id}")
+originalList = pos.copy()
+all_all_roles = []
+positions_model.map_positions_to_ou(ous, pos)
+#for ou in ous:
+#    belongTo : list = []
+#    print(f"OU Name: {ou.name}, OU ID: {ou.id}")
+#    for position in pos:
+#        if position.ou_id == ou.id:
+#            belongTo.append(position)
+#            pos.remove(position)
+#    if len(belongTo) == 0:
+#        print("No positions found")
+#    else:
+#        print(f"Position: {len(belongTo)}")
+#        for po in belongTo:
+#            user_role_ids = position_roles.get_user_role_from_position(po.id)
+#            if (len(user_role_ids) == 0):
+#                break
+#            else:
+#                all_all_roles.append(user_role_ids)
+#                for role_id in user_role_ids:
+#                       print(role_id.user_role_id)
+#                       user_role = user_roles_model.get_group_from_id(role_id.user_role_id) 
+#                       print(f"Role: {user_role.name}")
+#    print("")
+#print(f"Amount of positions: {len(originalList)}")
+#print(f"Amount of roles: {len(all_all_roles)}")
+#print(f"Amount of organizations {len(ous)}")
 #
 #user_role_id = position_roles.get_user_role_from_position('22a8b2e9-b367-1909-62f8-a3bec3368efb')
 #
 #user_roles_model.get_id_name_identifier(user_role_id.user_role_id)
+def hello_world():
+    return"Hello World"

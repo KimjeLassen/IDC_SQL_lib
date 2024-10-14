@@ -1,0 +1,10 @@
+@startuml ous_with_mapping
+
+class "Organizational Unit" as OU {
+  + id : string <<PK>>
+  + name : string
+  + short_name : string
+  + positions : Position[]
+  + users_roles : User_Roles[]
+  + positions_roles : Position_Roles[]
+}
