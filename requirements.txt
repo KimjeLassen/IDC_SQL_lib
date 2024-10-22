@@ -4,3 +4,4 @@ pymysql
 jupyter
 ipykernel
 python-dotenv
+pandas
