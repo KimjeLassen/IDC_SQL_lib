@@ -6,3 +6,5 @@ ipykernel
 python-dotenv
 pandas
 kneed
+scikit-learn
+matplotlib
