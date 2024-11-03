@@ -4,196 +4,87 @@ from db_base import engine
 
 from models import positions_model, user_roles_model, ous_model
 import pandas as pd
-import pandas as pd
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans,AgglomerativeClustering
 from sklearn.metrics import silhouette_score
 import numpy as np
-from kneed import KneeLocator
+from sklearn.decomposition import PCA
+from scipy.cluster.hierarchy import dendrogram, linkage
 import matplotlib.pyplot as plt
 
-pos = positions_model.get_all_positions(10)
-ous = ous_model.get_name_and_ids(pos)
-originalList = pos.copy()
-all_all_roles = []
-#for positions in pos:
-#    print(f"Position name: {positions.name}, ou_id: {positions.ou_id}")
-positions_model.map_positions_to_ou(ous, pos)
-#for ou in ous:
-#    belongTo : list = []
-#    print(f"OU Name: {ou.name}, OU ID: {ou.id}")
-#    for position in pos:
-#        if position.ou_id == ou.id:
-#            belongTo.append(position)
-#            pos.remove(position)
-#    if len(belongTo) == 0:
-#        print("No positions found")
-#    else:
-#        print(f"Position: {len(belongTo)}")
-#        for po in belongTo:
-#            user_role_ids = position_roles.get_user_role_from_position(po.id)
-#            if (len(user_role_ids) == 0):
-#                break
-#            else:
-#                all_all_roles.append(user_role_ids)
-#                for role_id in user_role_ids:
-#                       print(role_id.user_role_id)
-#                       user_role = user_roles_model.get_group_from_id(role_id.user_role_id) 
-#                       print(f"Role: {user_role.name}")
-#    print("")
-#print(f"Amount of positions: {len(originalList)}")
-#print(f"Amount of roles: {len(all_all_roles)}")
-#print(f"Amount of organizations {len(ous)}")
-#
-#user_role_id = position_roles.get_user_role_from_position('22a8b2e9-b367-1909-62f8-a3bec3368efb')
-#
-#user_roles_model.get_id_name_identifier(user_role_id.user_role_id)
+def get_binary_matrix():
+    try:
+        sql_query = """
+        SELECT 
+            urm.user_id,
+            sr.name AS system_role_name
+        FROM 
+            idc_data.user_roles_mapping urm
+        JOIN 
+            idc_data.system_role_assignments sra ON urm.user_role_id = sra.user_role_id
+        JOIN 
+            idc_data.system_roles sr ON sra.system_role_id = sr.id;
+        """
 
-def clean_save_csv():
-    sql_query = """
-    SELECT DISTINCT
-        p.id AS position_id,
-        p.name AS position_name,
-        p.ou_id,
-        o.name AS ou_name,
-        ur.id AS role_id,
-        ur.name AS role_name
-    FROM korsbaek.positions p
-    JOIN korsbaek.ous o ON p.ou_id = o.id
-    JOIN korsbaek.position_roles pr ON p.id = pr.position_id
-    JOIN korsbaek.user_roles ur ON pr.user_role_id = ur.id;
-    """
+        # Execute SQL query and load data into DataFrame
+        df = pd.read_sql(sql_query, engine)
+        print("Data loaded successfully from the database.")
+
+        # Step 1: Convert system_role_name to binary columns (one-hot encoding for each role per user)
+        binary_access_matrix = pd.get_dummies(df, columns=['system_role_name'], prefix='', prefix_sep='').groupby('user_id').max()
+        return binary_access_matrix
     
-    df = pd.read_sql(sql_query, engine)
-    df_cleaned = df.dropna(subset=['position_name', 'role_name'])
-    df_cleaned = df_cleaned.drop_duplicates(subset=['position_id', 'role_name'])
-    df_cleaned = df_cleaned.drop(columns=['role_id'])
+    except Exception as e:
+        print("An error occurred:", e)
 
-    # Apply multi-hot encoding for the 'role_name' column
-    multi_hot_encoded_df = pd.get_dummies(df_cleaned, columns=['role_name'], prefix='', prefix_sep='')
+def clusters(binary_access_matrix : pd.DataFrame):
+    # Step 2: Determine the optimal number of clusters using silhouette score
+    range_n_clusters = list(range(2, 11))
+    silhouette_scores = []
+    optimal_n_clusters = 2
+    highest_silhouette_score = -1
 
-    # Group by 'position_id' to ensure each position has one row with aggregated roles
-    multi_hot_encoded_df_grouped = multi_hot_encoded_df.groupby('position_id').max().reset_index()
+    for n_clusters in range_n_clusters:
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+        cluster_labels = kmeans.fit_predict(binary_access_matrix)
+        silhouette_avg = silhouette_score(binary_access_matrix, cluster_labels)
+        silhouette_scores.append(silhouette_avg)
 
-    # Save the cleaned and multi-hot encoded dataset to a CSV file
-    csv_file_path = 'multi_hot_encoded_dataset.csv'
-    multi_hot_encoded_df_grouped.to_csv(csv_file_path, index=False)
-    
-    return csv_file_path
+        if silhouette_avg > highest_silhouette_score:
+            highest_silhouette_score = silhouette_avg
+            optimal_n_clusters = n_clusters
 
-def optimal_clusters(file_path, max_clusters=20, alpha=0.5, plot=True):
-    """
-    Analyze the optimal number of clusters in a dataset using both the Elbow and Silhouette methods.
-    
-    :param file_path: Path to the CSV file containing the dataset.
-    :param max_clusters: Maximum number of clusters to consider (default is 20).
-    :param alpha: Weight to give the Silhouette method when combining the results (default is 0.5).
-    :param plot: Whether to plot the results (default is True).
-    :return: Tuple containing the optimal number of clusters from the Elbow method, Silhouette method, and the combined result.
-    """
-    
-    # Load the dataset
-    def load_dataset(file_path):
-        data = pd.read_csv(file_path)
-        # Assuming binary columns are the ones to use for clustering
-        binary_columns = data.select_dtypes(include=['bool'])
-        X = binary_columns.astype(int)  # Convert True/False to 1/0
-        return X
+    # Save the optimal number of clusters as a variable
+    optimal_cluster_count = optimal_n_clusters
+    print(f"The optimal number of clusters is: {optimal_cluster_count} with a silhouette score of {highest_silhouette_score}")
+    return optimal_cluster_count
 
-    # Elbow method using kneed to find the optimal number of clusters
-    def find_best_k_elbow(X, max_clusters=20):
-        options = range(2, max_clusters)
-        inertias = []
+def get_kmeans_labels(optimal_cluster_count : int, binary_access_matrix : pd.DataFrame):
+    # Step 3: Run KMeans clustering with the optimal number of clusters
+    optimal_kmeans = KMeans(n_clusters=optimal_cluster_count, random_state=42)
+    kmeans_labels = optimal_kmeans.fit_predict(binary_access_matrix)
+    return kmeans_labels
 
-        for n_clusters in options:
-            model = KMeans(n_clusters=n_clusters, random_state=42).fit(X)
-            inertias.append(model.inertia_)
+def get_hierarchical_labels(optimal_cluster_count : int, binary_access_matrix : pd.DataFrame):
+    # Step 4: Run Hierarchical clustering with the optimal number of clusters
+    hierarchical = AgglomerativeClustering(n_clusters=optimal_cluster_count)
+    hierarchical_labels = hierarchical.fit_predict(binary_access_matrix)
+    return hierarchical_labels
 
-        knee_locator = KneeLocator(options, inertias, curve="convex", direction="decreasing")
-        best_k_elbow = knee_locator.elbow
+def get_reduced_data(binary_access_matrix : pd.DataFrame):
+    # Step 5: Reduce dimensions to 2D for visualization using PCA
+    pca = PCA(n_components=2)
+    reduced_data = pca.fit_transform(binary_access_matrix)
+    return reduced_data
 
-        print(f"Elbow Method - Optimal number of clusters: {best_k_elbow}")
+    # Plotting function
+def plot_clusters(data, labels, title):
+    plt.figure(figsize=(8, 6))
+    plt.scatter(data[:, 0], data[:, 1], c=labels, cmap='viridis', s=50)
+    plt.title(title)
+    plt.xlabel("PCA Component 1")
+    plt.ylabel("PCA Component 2")
+    plt.colorbar()
+    plt.show()
 
-        # Plot inertia vs number of clusters
-        if plot:
-            plt.figure(figsize=(6, 4))
-            plt.plot(options, inertias, '-o')
-            plt.axvline(best_k_elbow, color='red', linestyle='--')
-            plt.title("Elbow Method (Inertia)")
-            plt.xlabel("No. of clusters (K)")
-            plt.ylabel("Inertia")
-            plt.show()
+    # K-Means Clustering Plot
 
-        return best_k_elbow
-
-    # Silhouette method to find the optimal number of clusters
-    def find_best_k_silhouette(X, max_clusters=20):
-        options = range(2, max_clusters)
-        silhouette_scores = []
-
-        for n_clusters in options:
-            model = KMeans(n_clusters=n_clusters, random_state=42).fit(X)
-            labels = model.labels_
-            score = silhouette_score(X, labels)
-            silhouette_scores.append(score)
-
-        # Plot silhouette scores
-        if plot:
-            plt.figure(figsize=(6, 4))
-            plt.plot(options, silhouette_scores, '-o')
-            plt.axvline(np.argmax(silhouette_scores) + 2, color='red', linestyle='--')  # Offset +2 because range starts at 2
-            plt.title("Silhouette Method")
-            plt.xlabel("No. of clusters (K)")
-            plt.ylabel("Silhouette Score")
-            plt.show()
-
-        best_k_silhouette = options[np.argmax(silhouette_scores)]
-        print(f"Silhouette Method - Optimal number of clusters: {best_k_silhouette}")
-        return best_k_silhouette
-
-    # Combine both methods by weighting the silhouette result against the elbow result
-    def combine_elbow_and_silhouette(K_elbow, K_silhouette, alpha=0.5):
-        K_final = K_elbow + alpha * (K_silhouette - K_elbow)
-        return round(K_final)
-
-    # Main logic
-    X = load_dataset(file_path)
-    best_k_elbow = find_best_k_elbow(X, max_clusters)
-    best_k_silhouette = find_best_k_silhouette(X, max_clusters)
-    best_k_combined = combine_elbow_and_silhouette(best_k_elbow, best_k_silhouette, alpha)
-
-    if plot:
-        # Plot inertia vs number of clusters for elbow method
-        plt.figure(figsize=(10, 5))
-        
-        # Elbow Method plot (inertia)
-        plt.subplot(1, 2, 1)
-        inertias = []
-        options = range(2, max_clusters)
-        for n_clusters in options:
-            model = KMeans(n_clusters=n_clusters, random_state=42).fit(X)
-            inertias.append(model.inertia_)
-        plt.plot(options, inertias, '-o')
-        plt.axvline(best_k_elbow, color='red', linestyle='--')
-        plt.title("Elbow Method (Inertia)")
-        plt.xlabel("No. of clusters (K)")
-        plt.ylabel("Inertia")
-        
-        # Silhouette Method plot (silhouette scores)
-        plt.subplot(1, 2, 2)
-        silhouette_scores = []
-        for n_clusters in options:
-            model = KMeans(n_clusters=n_clusters, random_state=42).fit(X)
-            labels = model.labels_
-            score = silhouette_score(X, labels)
-            silhouette_scores.append(score)
-        plt.plot(options, silhouette_scores, '-o')
-        plt.axvline(best_k_silhouette, color='red', linestyle='--')
-        plt.title("Silhouette Method")
-        plt.xlabel("No. of clusters (K)")
-        plt.ylabel("Silhouette Score")
-        
-        plt.tight_layout()
-        plt.show()
-
-    print(f"Combined Method - Final number of clusters: {best_k_combined}")
-    return best_k_elbow, best_k_silhouette, best_k_combined
