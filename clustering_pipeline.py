@@ -9,6 +9,7 @@ from sklearn.decomposition import PCA
 from scipy.cluster.hierarchy import dendrogram, linkage
 import matplotlib.pyplot as plt
 import os
+import glob  
 
 def fetch_data(sql_query):
     """
@@ -71,6 +72,10 @@ def analyze_clusters(binary_access_matrix):
     """
     # Create 'clusters' directory if it doesn't exist
     os.makedirs('clusters', exist_ok=True)
+    
+    # Remove existing CSV files in 'clusters' directory
+    for file in glob.glob('clusters/*.csv'):
+        os.remove(file)
     
     # Group the data by clusters
     clusters = binary_access_matrix.groupby('cluster')
@@ -222,9 +227,22 @@ def plot_dendrogram(data, labels):
     """
     # Perform hierarchical clustering to obtain linkage matrix
     linked = linkage(data, method='average')
-    # Plot the dendrogram
-    plt.figure(figsize=(10, 7))
-    dendrogram(linked, orientation='top', labels=labels, distance_sort='descending', show_leaf_counts=False)
+    
+    # Adjust the figure size
+    plt.figure(figsize=(15, 10))  # Increase figure size
+
+    # Plot the dendrogram with options for readability
+    dendrogram(
+        linked,
+        orientation='top',
+        labels=labels,
+        distance_sort='descending',
+        show_leaf_counts=False,
+        no_labels=True,  # Remove labels on x-axis
+        truncate_mode='level',  # Truncate to top levels
+        p=5  # Show only the top 5 levels
+    )
+    
     plt.title("Dendrogram for Hierarchical Clustering")
     plt.xlabel("Users")
     plt.ylabel("Euclidean Distance")
@@ -267,9 +285,19 @@ def run_pipeline(df):
         # Plot the results of Hierarchical clustering
         plot_clusters(data_without_cluster, hierarchical_labels, "Hierarchical Clustering")
 
-        # Sample a subset of data for dendrogram visualization
-        subset_data = data_without_cluster.sample(n=100, random_state=42)  # Adjust sample size as needed
+        # Proportionally sample data for dendrogram visualization
+        sample_fraction = 0.1  # 10% sampling from each cluster
+        max_sample_size = 500  # Cap sampling to 500 users per cluster
 
-        # Plot the dendrogram for the subset of data
+        # Perform proportional sampling by cluster
+        subset_data = (
+            binary_access_matrix.groupby('cluster')
+            .apply(lambda x: x.sample(frac=sample_fraction, random_state=42) if len(x) * sample_fraction <= max_sample_size else x.sample(n=max_sample_size, random_state=42))
+            .reset_index(drop=True)
+            .drop('cluster', axis=1)  # Remove cluster column for dendrogram
+        )
+
+        # Plot the dendrogram for the proportionally sampled data
         plot_dendrogram(subset_data, subset_data.index.tolist())
+
 
