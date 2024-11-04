@@ -1,15 +1,12 @@
-import sys
-sys.path.insert(1, 'models')
-
+import os
+import glob  
 from db_base import engine
 import pandas as pd
 from sklearn.cluster import KMeans, AgglomerativeClustering
 from sklearn.metrics import silhouette_score
-from sklearn.decomposition import PCA
 from scipy.cluster.hierarchy import dendrogram, linkage
 import matplotlib.pyplot as plt
-import os
-import glob  
+
 
 def fetch_data(sql_query):
     """
