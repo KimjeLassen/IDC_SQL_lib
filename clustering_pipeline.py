@@ -8,7 +8,7 @@ from sklearn.metrics import silhouette_score
 from sklearn.decomposition import PCA
 from scipy.cluster.hierarchy import dendrogram, linkage
 import matplotlib.pyplot as plt
-
+import os
 
 def fetch_data(sql_query):
     """
@@ -56,6 +56,57 @@ def transform_to_binary_matrix(df):
     binary_access_matrix = binary_access_matrix.groupby('user_id').max()
     return binary_access_matrix
 
+def analyze_clusters(binary_access_matrix):
+    """
+    Analyze the contents of each cluster to validate their contents.
+    
+    Parameters
+    ----------
+    binary_access_matrix : DataFrame
+        The binary access matrix with cluster labels assigned.
+    
+    Returns
+    -------
+    None
+    """
+    # Create 'clusters' directory if it doesn't exist
+    os.makedirs('clusters', exist_ok=True)
+    
+    # Group the data by clusters
+    clusters = binary_access_matrix.groupby('cluster')
+    
+    for cluster_label, cluster_data in clusters:
+        print(f"\nCluster {cluster_label}:")
+        # Remove 'cluster' column to get only role columns
+        cluster_roles = cluster_data.drop('cluster', axis=1)
+        
+        # Compute the sum of each role in the cluster
+        role_sums = cluster_roles.sum()
+        # Calculate the percentage of users in the cluster that have each role
+        role_percentages = (role_sums / len(cluster_data)) * 100
+        
+        # Get roles that are common in the cluster (e.g., present in over 50% of users)
+        common_roles = role_percentages[role_percentages > 50].sort_values(ascending=False)
+        
+        print(f"\nNumber of users in cluster: {len(cluster_data)}")
+        print("\nCommon roles (present in over 50% of users):")
+        print(common_roles)
+        
+        # List the top N roles
+        top_n = 5
+        top_roles = role_percentages.sort_values(ascending=False).head(top_n)
+        print(f"\nTop {top_n} roles in the cluster:")
+        print(top_roles)
+        
+        # Identify roles unique to this cluster (if any)
+        unique_roles = role_percentages[role_percentages == 100]
+        if not unique_roles.empty:
+            print("\nRoles unique to this cluster (present in all users of the cluster):")
+            print(unique_roles)
+        
+        # Save cluster data to 'clusters' directory
+        cluster_data.to_csv(f"clusters/cluster_{cluster_label}_data.csv")
+
 def find_optimal_clusters(data, min_clusters=2, max_clusters=10):
     """
     Determine the optimal number of clusters using the silhouette score.
@@ -92,7 +143,7 @@ def find_optimal_clusters(data, min_clusters=2, max_clusters=10):
             highest_silhouette_score = silhouette_avg
             optimal_n_clusters = n_clusters
             
-    print(f"The optimal number of clusters is: {optimal_n_clusters} with a silhouette score of {highest_silhouette_score}")
+    print(f"\nThe optimal number of clusters is: {optimal_n_clusters} with a silhouette score of {highest_silhouette_score}")
     return optimal_n_clusters
 
 def perform_clustering(data, n_clusters):
@@ -183,14 +234,6 @@ def run_pipeline(df):
     """
     Execute the full data processing and clustering pipeline.
 
-    This function orchestrates the entire process from data transformation to clustering and visualization.
-    It performs the following steps:
-    - Transforms the raw data into a binary access matrix.
-    - Determines the optimal number of clusters using the silhouette score.
-    - Performs KMeans and Hierarchical clustering with the optimal number of clusters.
-    - Plots the clustering results using PCA for dimensionality reduction.
-    - Generates a dendrogram for a subset of the data to visualize hierarchical relationships.
-
     Parameters
     ----------
     df : DataFrame
@@ -209,13 +252,24 @@ def run_pipeline(df):
         # Perform clustering with the optimal number of clusters
         kmeans_labels, hierarchical_labels = perform_clustering(binary_access_matrix, optimal_cluster_count)
 
+        # Assign cluster labels to the DataFrame
+        binary_access_matrix['cluster'] = kmeans_labels  # Use kmeans_labels or hierarchical_labels
+
+        # Analyze cluster contents
+        analyze_clusters(binary_access_matrix)
+
+        # **Drop 'cluster' column before plotting**
+        data_without_cluster = binary_access_matrix.drop('cluster', axis=1)
+
         # Plot the results of KMeans clustering
-        plot_clusters(binary_access_matrix, kmeans_labels, "K-Means Clustering")
+        plot_clusters(data_without_cluster, kmeans_labels, "K-Means Clustering")
 
         # Plot the results of Hierarchical clustering
-        plot_clusters(binary_access_matrix, hierarchical_labels, "Hierarchical Clustering")
+        plot_clusters(data_without_cluster, hierarchical_labels, "Hierarchical Clustering")
 
         # Sample a subset of data for dendrogram visualization
-        subset_data = binary_access_matrix.sample(n=100, random_state=42)  # Adjust sample size as needed
+        subset_data = data_without_cluster.sample(n=100, random_state=42)  # Adjust sample size as needed
+
         # Plot the dendrogram for the subset of data
         plot_dendrogram(subset_data, subset_data.index.tolist())
+
