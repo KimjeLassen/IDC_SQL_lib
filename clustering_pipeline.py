@@ -180,36 +180,6 @@ def perform_clustering(data, n_clusters):
     
     return kmeans_labels, hierarchical_labels
 
-def plot_clusters(data, labels, title):
-    """
-    Plot clusters in 2D space using PCA for dimensionality reduction.
-
-    Parameters
-    ----------
-    data : DataFrame or array-like
-        The data to plot.
-    labels : array-like
-        Cluster labels for each data point.
-    title : str
-        Title for the plot.
-
-    Returns
-    -------
-    None
-    """
-    # Reduce data to 2 principal components for visualization
-    pca = PCA(n_components=2)
-    reduced_data = pca.fit_transform(data)
-    
-    # Create a scatter plot of the data points
-    plt.figure(figsize=(8, 6))
-    plt.scatter(reduced_data[:, 0], reduced_data[:, 1], c=labels, cmap='viridis', s=50)
-    plt.title(title)
-    plt.xlabel("PCA Component 1")
-    plt.ylabel("PCA Component 2")
-    plt.colorbar()
-    plt.show()
-
 def plot_dendrogram(data, labels):
     """
     Generate a dendrogram for hierarchical clustering.
@@ -275,15 +245,6 @@ def run_pipeline(df):
 
         # Analyze cluster contents
         analyze_clusters(binary_access_matrix)
-
-        # **Drop 'cluster' column before plotting**
-        data_without_cluster = binary_access_matrix.drop('cluster', axis=1)
-
-        # Plot the results of KMeans clustering
-        plot_clusters(data_without_cluster, kmeans_labels, "K-Means Clustering")
-
-        # Plot the results of Hierarchical clustering
-        plot_clusters(data_without_cluster, hierarchical_labels, "Hierarchical Clustering")
 
         # Proportionally sample data for dendrogram visualization
         sample_fraction = 0.1  # 10% sampling from each cluster
