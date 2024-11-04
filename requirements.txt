@@ -8,3 +8,4 @@ pandas
 kneed
 scikit-learn
 matplotlib
+mlflow
