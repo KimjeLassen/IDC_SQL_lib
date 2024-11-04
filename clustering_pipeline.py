@@ -78,30 +78,30 @@ def analyze_clusters(binary_access_matrix):
     for cluster_label, cluster_data in clusters:
         print(f"\nCluster {cluster_label}:")
         # Remove 'cluster' column to get only role columns
-        cluster_roles = cluster_data.drop('cluster', axis=1)
+        cluster_privileges = cluster_data.drop('cluster', axis=1)
         
         # Compute the sum of each role in the cluster
-        role_sums = cluster_roles.sum()
-        # Calculate the percentage of users in the cluster that have each role
-        role_percentages = (role_sums / len(cluster_data)) * 100
+        privilege_sums = cluster_privileges.sum()
+        # Calculate the percentage of users in the cluster that have each privilege
+        privilege_percentages = (privilege_sums / len(cluster_data)) * 100
         
-        # Get roles that are common in the cluster (e.g., present in over 50% of users)
-        common_roles = role_percentages[role_percentages > 50].sort_values(ascending=False)
+        # Get privileges that are common in the cluster (e.g., present in over 50% of users)
+        common_privileges = privilege_percentages[privilege_percentages > 50].sort_values(ascending=False)
         
         print(f"\nNumber of users in cluster: {len(cluster_data)}")
-        print("\nCommon roles (present in over 50% of users):")
-        print(common_roles)
+        print("\nCommon privileges (present in over 50% of users):")
+        print(common_privileges)
         
-        # List the top N roles
+        # List the top N privileges
         top_n = 5
-        top_roles = role_percentages.sort_values(ascending=False).head(top_n)
-        print(f"\nTop {top_n} roles in the cluster:")
+        top_roles = privilege_percentages.sort_values(ascending=False).head(top_n)
+        print(f"\nTop {top_n} privileges in the cluster:")
         print(top_roles)
         
         # Identify roles unique to this cluster (if any)
-        unique_roles = role_percentages[role_percentages == 100]
+        unique_roles = privilege_percentages[privilege_percentages == 100]
         if not unique_roles.empty:
-            print("\nRoles unique to this cluster (present in all users of the cluster):")
+            print("\nPrivileges unique to this cluster (present in all users of the cluster):")
             print(unique_roles)
         
         # Save cluster data to 'clusters' directory
