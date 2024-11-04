@@ -8,18 +8,19 @@ from sklearn.metrics import silhouette_score
 from sklearn.decomposition import PCA
 from scipy.cluster.hierarchy import dendrogram, linkage
 import matplotlib.pyplot as plt
+from connect import db_name
 
 # Main pipeline execution
-sql_query = """
+sql_query = f"""
     SELECT 
         urm.user_id,
         sr.name AS system_role_name
     FROM 
-        korsbaek.user_roles_mapping urm
+        {db_name}.user_roles_mapping urm
     JOIN 
-        korsbaek.system_role_assignments sra ON urm.user_role_id = sra.user_role_id
+        {db_name}.system_role_assignments sra ON urm.user_role_id = sra.user_role_id
     JOIN 
-        korsbaek.system_roles sr ON sra.system_role_id = sr.id;
+        {db_name}.system_roles sr ON sra.system_role_id = sr.id;
 """
 
 def fetch_data(sql_query):
