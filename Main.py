@@ -84,7 +84,7 @@ def plot_clusters(data, labels, title):
 
 def plot_dendrogram(data, labels):
     """Generate a dendrogram for hierarchical clustering."""
-    linked = linkage(data, method='ward')
+    linked = linkage(data, method='average')
     plt.figure(figsize=(10, 7))
     dendrogram(linked, orientation='top', labels=labels, distance_sort='descending', show_leaf_counts=False)
     plt.title("Dendrogram for Hierarchical Clustering")
@@ -107,4 +107,5 @@ if df is not None:
     plot_clusters(binary_access_matrix, hierarchical_labels, "Hierarchical Clustering")
 
     # Plot Dendrogram
-    plot_dendrogram(binary_access_matrix, binary_access_matrix.index.tolist())
+    subset_data = binary_access_matrix.sample(n=100, random_state=42)  # Adjust sample size as needed
+    plot_dendrogram(subset_data, subset_data.index.tolist())
