@@ -75,7 +75,7 @@ def safe_start_run(run_name="Clustering_Run"):
     mlflow.end_run()  # Ends any active run
     return mlflow.start_run(run_name=run_name)
 
-def perform_clustering(data, n_clusters, dbscan_eps=0.5, dbscan_min_samples=5):
+def perform_clustering(data, n_clusters, dbscan_eps, dbscan_min_samples):
     """
     Run KMeans, Agglomerative, and DBSCAN clustering on the data and log the models with MLflow.
     
