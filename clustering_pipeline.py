@@ -1,17 +1,16 @@
-import os
-import glob  
 import logging
 import traceback
 from db_base import engine
 import pandas as pd
-from sklearn.cluster import KMeans, AgglomerativeClustering
-from sklearn.metrics import silhouette_score
-from scipy.cluster.hierarchy import dendrogram, linkage
-import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN
 import mlflow
 import mlflow.sklearn
 from mlflow.models.signature import infer_signature
 import joblib
+
+from k_means_cluster import analyze_clusters, find_optimal_clusters
+from dbscan_cluster import analyze_dbscan_clusters, plot_k_distance
+from hierarchical_cluster import analyze_hierarchical_clusters, plot_dendrogram
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -69,172 +68,6 @@ def transform_to_binary_matrix(df):
     mlflow.log_param("unique_roles", binary_access_matrix.shape[1])
     return binary_access_matrix
 
-def analyze_clusters(binary_access_matrix):
-    """
-    Analyze the contents of each cluster to validate their contents.
-    
-    Parameters
-    ----------
-    binary_access_matrix : DataFrame
-        The binary access matrix with cluster labels assigned.
-    
-    Returns
-    -------
-    None
-    """
-    cluster_dir = 'k_means_clusters'
-    os.makedirs(cluster_dir, exist_ok=True)
-    
-    # Remove existing CSV files in 'clusters' directory
-    for file in glob.glob(os.path.join(cluster_dir, '*.csv')):
-        os.remove(file)
-    
-    # Group the data by clusters
-    clusters = binary_access_matrix.groupby('k_means_clusters')
-    
-    for cluster_label, cluster_data in clusters:
-        print(f"\nK-Means Cluster {cluster_label}:")
-        # Remove 'cluster' column to get only role columns
-        cluster_privileges = cluster_data.drop('k_means_clusters', axis=1)
-        
-        # Compute the sum of each role in the cluster
-        privilege_sums = cluster_privileges.sum()
-        # Calculate the percentage of users in the cluster that have each privilege
-        privilege_percentages = (privilege_sums / len(cluster_data)) * 100
-        
-        # Get privileges that are common in the cluster (e.g., present in over 50% of users)
-        common_privileges = privilege_percentages[privilege_percentages > 50].sort_values(ascending=False)
-        
-        print(f"\nNumber of users in cluster: {len(cluster_data)}")
-        print("\nCommon privileges (present in over 50% of users):")
-        print(common_privileges)
-        
-        # List the top N privileges
-        top_n = 5
-        top_roles = privilege_percentages.sort_values(ascending=False).head(top_n)
-        print(f"\nTop {top_n} privileges in the cluster:")
-        print(top_roles)
-        
-        # Identify roles unique to this cluster (if any)
-        unique_roles = privilege_percentages[privilege_percentages == 100]
-        if not unique_roles.empty:
-            print("\nPrivileges unique to this cluster (present in all users of the cluster):")
-            print(unique_roles)
-        
-        # Save and log cluster data
-        cluster_file = os.path.join(cluster_dir, f"k_means_clusters_cluster_{cluster_label}_data.csv")
-        cluster_data.to_csv(cluster_file)
-        mlflow.log_artifact(cluster_file, artifact_path="k_means_clusters_data")
-
-def analyze_hierarchical_clusters(binary_access_matrix, hierarchical_labels):
-    """
-    Analyze the contents of each hierarchical cluster to validate their contents.
-
-    Parameters
-    ----------
-    binary_access_matrix : DataFrame
-        The binary access matrix with roles as columns and users as rows.
-    hierarchical_labels : array-like
-        The cluster labels assigned by AgglomerativeClustering.
-
-    Returns
-    -------
-    None
-    """
-    cluster_dir = 'hierarchical_clusters'
-    os.makedirs(cluster_dir, exist_ok=True)
-    
-    # Assign the hierarchical cluster labels to the binary access matrix
-    binary_access_matrix['hierarchical_cluster'] = hierarchical_labels
-    
-    # Remove any existing CSV files in 'hierarchical_clusters' directory
-    for file in glob.glob(os.path.join(cluster_dir, '*.csv')):
-        os.remove(file)
-    
-    # Group the data by hierarchical clusters
-    clusters = binary_access_matrix.groupby('hierarchical_cluster')
-    
-    for cluster_label, cluster_data in clusters:
-        print(f"\nHierarchical Cluster {cluster_label}:")
-        
-        # Drop the 'hierarchical_cluster' column to get only role columns
-        cluster_privileges = cluster_data.drop('hierarchical_cluster', axis=1)
-        
-        # Compute the sum of each role in the cluster
-        privilege_sums = cluster_privileges.sum()
-        # Calculate the percentage of users in the cluster that have each privilege
-        privilege_percentages = (privilege_sums / len(cluster_data)) * 100
-        
-        # Get privileges that are common in the cluster (e.g., present in over 50% of users)
-        common_privileges = privilege_percentages[privilege_percentages > 50].sort_values(ascending=False)
-        
-        print(f"\nNumber of users in cluster: {len(cluster_data)}")
-        print("\nCommon privileges (present in over 50% of users):")
-        print(common_privileges)
-        
-        # List the top N privileges
-        top_n = 5
-        top_roles = privilege_percentages.sort_values(ascending=False).head(top_n)
-        print(f"\nTop {top_n} privileges in the cluster:")
-        print(top_roles)
-        
-        # Identify roles unique to this cluster (if any)
-        unique_roles = privilege_percentages[privilege_percentages == 100]
-        if not unique_roles.empty:
-            print("\nPrivileges unique to this cluster (present in all users of the cluster):")
-            print(unique_roles)
-        
-        # Save and log cluster data
-        cluster_file = os.path.join(cluster_dir, f"hierarchical_cluster_{cluster_label}_data.csv")
-        cluster_data.to_csv(cluster_file)
-        mlflow.log_artifact(cluster_file, artifact_path="hierarchical_cluster_data")
-
-def find_optimal_clusters(data, min_clusters, max_clusters):
-    """
-    Determine the optimal number of clusters using the silhouette score.
-    
-    Parameters
-    ----------
-    data : DataFrame or array-like
-        The data to cluster.
-    min_clusters : int, optional
-        The minimum number of clusters to try. Default is 2.
-    max_clusters : int, optional
-        The maximum number of clusters to try. Default is 10.
-    
-    Returns
-    -------
-    int
-        The optimal number of clusters based on the highest silhouette score.
-    """
-    silhouette_scores = []
-    highest_silhouette_score = -1
-    optimal_n_clusters = min_clusters
-    
-    for n_clusters in range(min_clusters, max_clusters + 1):
-        try:
-            kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-            cluster_labels = kmeans.fit_predict(data)
-            silhouette_avg = silhouette_score(data, cluster_labels)
-            silhouette_scores.append(silhouette_avg)
-            
-            # Log silhouette score with step as n_clusters
-            mlflow.log_metric("silhouette_score", silhouette_avg, step=n_clusters)
-            
-            if silhouette_avg > highest_silhouette_score:
-                highest_silhouette_score = silhouette_avg
-                optimal_n_clusters = n_clusters
-        except Exception as e:
-            error_trace = traceback.format_exc()
-            logger.error(f"An error occurred while finding optimal clusters for n_clusters={n_clusters}:", exc_info=True)
-            mlflow.log_text(error_trace, f"find_optimal_clusters_error_n_clusters_{n_clusters}.txt")
-            mlflow.log_param(f"error_n_clusters_{n_clusters}", str(e))
-    
-    print(f"\nThe optimal number of clusters is: {optimal_n_clusters} with a silhouette score of {highest_silhouette_score}")
-    mlflow.log_param("optimal_n_clusters", optimal_n_clusters)
-    mlflow.log_metric("highest_silhouette_score", highest_silhouette_score)
-    return optimal_n_clusters
-
 def safe_start_run(run_name="Clustering_Run"):
     """
     Safely start an MLflow run by ending any active runs first.
@@ -242,16 +75,20 @@ def safe_start_run(run_name="Clustering_Run"):
     mlflow.end_run()  # Ends any active run
     return mlflow.start_run(run_name=run_name)
 
-def perform_clustering(data, n_clusters):
+def perform_clustering(data, n_clusters, dbscan_eps=0.5, dbscan_min_samples=5):
     """
-    Run KMeans clustering on the data and log the model with MLflow. Also perform AgglomerativeClustering and save it as an artifact.
+    Run KMeans, Agglomerative, and DBSCAN clustering on the data and log the models with MLflow.
     
     Parameters
     ----------
     data : DataFrame or array-like
         The data to cluster.
     n_clusters : int
-        The number of clusters to form.
+        The number of clusters to form for KMeans and AgglomerativeClustering.
+    dbscan_eps : float
+        The maximum distance between two samples for DBSCAN to consider them as in the same neighborhood.
+    dbscan_min_samples : int
+        The number of samples in a neighborhood for a point to be considered as a core point in DBSCAN.
     
     Returns
     -------
@@ -260,6 +97,8 @@ def perform_clustering(data, n_clusters):
             Cluster labels from KMeans clustering.
         hierarchical_labels : array
             Cluster labels from AgglomerativeClustering.
+        dbscan_labels : array
+            Cluster labels from DBSCAN clustering.
     """
     try:
         # KMeans clustering
@@ -268,11 +107,9 @@ def perform_clustering(data, n_clusters):
         mlflow.log_params(kmeans.get_params())
         mlflow.log_metric("kmeans_inertia", kmeans.inertia_)
         
-        # Define model signature and input example for KMeans
+        # Log KMeans model
         input_example = data.sample(1)
         signature = infer_signature(data, kmeans.predict(data))
-        
-        # Log KMeans model with signature and input example
         mlflow.sklearn.log_model(kmeans, "kmeans_model", signature=signature, input_example=input_example)
         
         # Agglomerative Clustering
@@ -280,12 +117,22 @@ def perform_clustering(data, n_clusters):
         hierarchical_labels = hierarchical.fit_predict(data)
         mlflow.log_params(hierarchical.get_params())
         
-        # Save AgglomerativeClustering model as an artifact
+        # Log Agglomerative Clustering model
         hierarchical_model_path = "hierarchical_model.pkl"
         joblib.dump(hierarchical, hierarchical_model_path)
         mlflow.log_artifact(hierarchical_model_path, artifact_path="models")
         
-        return kmeans_labels, hierarchical_labels
+        # DBSCAN clustering
+        dbscan = DBSCAN(eps=dbscan_eps, min_samples=dbscan_min_samples)
+        dbscan_labels = dbscan.fit_predict(data)
+        mlflow.log_params({"dbscan_eps": dbscan_eps, "dbscan_min_samples": dbscan_min_samples})
+        
+        # Log DBSCAN model
+        dbscan_model_path = "dbscan_model.pkl"
+        joblib.dump(dbscan, dbscan_model_path)
+        mlflow.log_artifact(dbscan_model_path, artifact_path="models")
+        
+        return kmeans_labels, hierarchical_labels, dbscan_labels
     except Exception as e:
         error_trace = traceback.format_exc()
         logger.error("An error occurred during clustering:", exc_info=True)
@@ -293,57 +140,7 @@ def perform_clustering(data, n_clusters):
         mlflow.log_param("clustering_error", str(e))
         raise
 
-def plot_dendrogram(data, labels):
-    """
-    Generate a dendrogram for hierarchical clustering.
-    
-    Parameters
-    ----------
-    data : DataFrame or array-like
-        The data to cluster and plot.
-    labels : list
-        Labels for each data point (e.g., user IDs).
-    
-    Returns
-    -------
-    None
-    """
-    try:
-        # Perform hierarchical clustering to obtain linkage matrix
-        linked = linkage(data, method='average')
-        
-        # Adjust the figure size
-        plt.figure(figsize=(15, 10))  # Increase figure size
-    
-        # Plot the dendrogram with options for readability
-        dendrogram(
-            linked,
-            orientation='top',
-            labels=labels,
-            distance_sort='descending',
-            show_leaf_counts=False,
-            no_labels=True,  # Remove labels on x-axis
-            truncate_mode='level',  # Truncate to top levels
-            p=20 # Show only the top 5 levels
-        )
-        
-        plt.title("Dendrogram for Hierarchical Clustering")
-        plt.xlabel("Users")
-        plt.ylabel("Euclidean Distance")
-        # Save the plot to a file
-        plt.savefig("dendrogram.png")
-        # Log the artifact
-        mlflow.log_artifact("dendrogram.png", artifact_path="plots")
-        plt.show()
-        plt.close()  # Close the plot to free memory
-    except Exception as e:
-        error_trace = traceback.format_exc()
-        logger.error("An error occurred while plotting dendrogram:", exc_info=True)
-        mlflow.log_text(error_trace, "plot_dendrogram_error_trace.txt")
-        mlflow.log_param("plot_dendrogram_error", str(e))
-        raise
-
-def run_pipeline(df, min_clusters=3, max_clusters=8, sample_fraction=0.1, max_sample_size=500):
+def run_pipeline(df, min_clusters=3, max_clusters=8, sample_fraction=0.1, max_sample_size=500, dbscan_eps=0.5, dbscan_min_samples=5):
     """
     Execute the full data processing and clustering pipeline.
     
@@ -359,6 +156,10 @@ def run_pipeline(df, min_clusters=3, max_clusters=8, sample_fraction=0.1, max_sa
         Fraction of samples to take for dendrogram visualization. Default is 0.1 (10%).
     max_sample_size : int, optional
         Maximum number of samples per cluster for dendrogram visualization. Default is 500.
+    dbscan_eps : float, optional
+        The maximum distance between two samples for DBSCAN to consider them as in the same neighborhood.
+    dbscan_min_samples : int, optional
+        The number of samples in a neighborhood for a point to be considered as a core point in DBSCAN.
     
     Returns
     -------
@@ -379,15 +180,20 @@ def run_pipeline(df, min_clusters=3, max_clusters=8, sample_fraction=0.1, max_sa
                 binary_access_matrix = transform_to_binary_matrix(df)
                 
                 optimal_cluster_count = find_optimal_clusters(binary_access_matrix, min_clusters, max_clusters)
-                kmeans_labels, hierarchical_labels = perform_clustering(binary_access_matrix, optimal_cluster_count)
+                kmeans_labels, hierarchical_labels, dbscan_labels = perform_clustering(
+                    binary_access_matrix, optimal_cluster_count, dbscan_eps, dbscan_min_samples)
                 
                 # Analyze K-Means clusters
-                binary_access_matrix['k_means_clusters'] = kmeans_labels  # Assign K-Means labels with explicit name
+                binary_access_matrix['k_means_clusters'] = kmeans_labels
                 analyze_clusters(binary_access_matrix)
-
+                
                 # Analyze hierarchical clusters
-                binary_access_matrix.drop('k_means_clusters', axis=1, inplace=True)  # Clean up K-Means labels
+                binary_access_matrix.drop('k_means_clusters', axis=1, inplace=True)
                 analyze_hierarchical_clusters(binary_access_matrix, hierarchical_labels)
+                
+                # Analyze DBSCAN clusters
+                binary_access_matrix.drop('hierarchical_cluster', axis=1, inplace=True)
+                analyze_dbscan_clusters(binary_access_matrix, dbscan_labels)
                 
                 # Sampling for dendrogram visualization using hierarchical clusters
                 binary_access_matrix['hierarchical_cluster'] = hierarchical_labels
@@ -398,11 +204,13 @@ def run_pipeline(df, min_clusters=3, max_clusters=8, sample_fraction=0.1, max_sa
                     .reset_index(drop=True)
                     .drop('hierarchical_cluster', axis=1)
                 )
-                
+
+                # K-distance plot to help determine eps for DBSCAN
+                plot_k_distance(binary_access_matrix, dbscan_min_samples)
                 plot_dendrogram(subset_data, subset_data.index.tolist())
+                
     except Exception as e:
         logger.error("An error occurred in run_pipeline:", exc_info=True)
         mlflow.log_param("run_pipeline_error", str(e))
         raise
-
 

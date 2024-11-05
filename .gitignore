@@ -157,12 +157,17 @@ cython_debug/
 #clusters folder
 clusters/
 
+#ML
+k_distance_plot.png
+
 #MLFLOW
 mlruns/
 dendrogram.png
 hierarchical_model.pkl
 hierarchical_clusters/
 k_means_clusters/
+dbscan_clusters/
+dbscan_model.pkl
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
