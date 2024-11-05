@@ -82,7 +82,7 @@ def analyze_clusters(binary_access_matrix):
     -------
     None
     """
-    cluster_dir = 'clusters'
+    cluster_dir = 'k_means_clusters'
     os.makedirs(cluster_dir, exist_ok=True)
     
     # Remove existing CSV files in 'clusters' directory
@@ -90,12 +90,12 @@ def analyze_clusters(binary_access_matrix):
         os.remove(file)
     
     # Group the data by clusters
-    clusters = binary_access_matrix.groupby('cluster')
+    clusters = binary_access_matrix.groupby('k_means_clusters')
     
     for cluster_label, cluster_data in clusters:
-        print(f"\nCluster {cluster_label}:")
+        print(f"\nK-Means Cluster {cluster_label}:")
         # Remove 'cluster' column to get only role columns
-        cluster_privileges = cluster_data.drop('cluster', axis=1)
+        cluster_privileges = cluster_data.drop('k_means_clusters', axis=1)
         
         # Compute the sum of each role in the cluster
         privilege_sums = cluster_privileges.sum()
@@ -122,11 +122,74 @@ def analyze_clusters(binary_access_matrix):
             print(unique_roles)
         
         # Save and log cluster data
-        cluster_file = os.path.join(cluster_dir, f"cluster_{cluster_label}_data.csv")
+        cluster_file = os.path.join(cluster_dir, f"k_means_clusters_cluster_{cluster_label}_data.csv")
         cluster_data.to_csv(cluster_file)
-        mlflow.log_artifact(cluster_file, artifact_path="cluster_data")
+        mlflow.log_artifact(cluster_file, artifact_path="k_means_clusters_data")
 
-def find_optimal_clusters(data, min_clusters=2, max_clusters=10):
+def analyze_hierarchical_clusters(binary_access_matrix, hierarchical_labels):
+    """
+    Analyze the contents of each hierarchical cluster to validate their contents.
+
+    Parameters
+    ----------
+    binary_access_matrix : DataFrame
+        The binary access matrix with roles as columns and users as rows.
+    hierarchical_labels : array-like
+        The cluster labels assigned by AgglomerativeClustering.
+
+    Returns
+    -------
+    None
+    """
+    cluster_dir = 'hierarchical_clusters'
+    os.makedirs(cluster_dir, exist_ok=True)
+    
+    # Assign the hierarchical cluster labels to the binary access matrix
+    binary_access_matrix['hierarchical_cluster'] = hierarchical_labels
+    
+    # Remove any existing CSV files in 'hierarchical_clusters' directory
+    for file in glob.glob(os.path.join(cluster_dir, '*.csv')):
+        os.remove(file)
+    
+    # Group the data by hierarchical clusters
+    clusters = binary_access_matrix.groupby('hierarchical_cluster')
+    
+    for cluster_label, cluster_data in clusters:
+        print(f"\nHierarchical Cluster {cluster_label}:")
+        
+        # Drop the 'hierarchical_cluster' column to get only role columns
+        cluster_privileges = cluster_data.drop('hierarchical_cluster', axis=1)
+        
+        # Compute the sum of each role in the cluster
+        privilege_sums = cluster_privileges.sum()
+        # Calculate the percentage of users in the cluster that have each privilege
+        privilege_percentages = (privilege_sums / len(cluster_data)) * 100
+        
+        # Get privileges that are common in the cluster (e.g., present in over 50% of users)
+        common_privileges = privilege_percentages[privilege_percentages > 50].sort_values(ascending=False)
+        
+        print(f"\nNumber of users in cluster: {len(cluster_data)}")
+        print("\nCommon privileges (present in over 50% of users):")
+        print(common_privileges)
+        
+        # List the top N privileges
+        top_n = 5
+        top_roles = privilege_percentages.sort_values(ascending=False).head(top_n)
+        print(f"\nTop {top_n} privileges in the cluster:")
+        print(top_roles)
+        
+        # Identify roles unique to this cluster (if any)
+        unique_roles = privilege_percentages[privilege_percentages == 100]
+        if not unique_roles.empty:
+            print("\nPrivileges unique to this cluster (present in all users of the cluster):")
+            print(unique_roles)
+        
+        # Save and log cluster data
+        cluster_file = os.path.join(cluster_dir, f"hierarchical_cluster_{cluster_label}_data.csv")
+        cluster_data.to_csv(cluster_file)
+        mlflow.log_artifact(cluster_file, artifact_path="hierarchical_cluster_data")
+
+def find_optimal_clusters(data, min_clusters, max_clusters):
     """
     Determine the optimal number of clusters using the silhouette score.
     
@@ -261,7 +324,7 @@ def plot_dendrogram(data, labels):
             show_leaf_counts=False,
             no_labels=True,  # Remove labels on x-axis
             truncate_mode='level',  # Truncate to top levels
-            p=5  # Show only the top 5 levels
+            p=20 # Show only the top 5 levels
         )
         
         plt.title("Dendrogram for Hierarchical Clustering")
@@ -280,7 +343,7 @@ def plot_dendrogram(data, labels):
         mlflow.log_param("plot_dendrogram_error", str(e))
         raise
 
-def run_pipeline(df, min_clusters=2, max_clusters=10, sample_fraction=0.1, max_sample_size=500):
+def run_pipeline(df, min_clusters=3, max_clusters=8, sample_fraction=0.1, max_sample_size=500):
     """
     Execute the full data processing and clustering pipeline.
     
@@ -314,16 +377,26 @@ def run_pipeline(df, min_clusters=2, max_clusters=10, sample_fraction=0.1, max_s
             
             if df is not None:
                 binary_access_matrix = transform_to_binary_matrix(df)
+                
                 optimal_cluster_count = find_optimal_clusters(binary_access_matrix, min_clusters, max_clusters)
                 kmeans_labels, hierarchical_labels = perform_clustering(binary_access_matrix, optimal_cluster_count)
-                binary_access_matrix['cluster'] = kmeans_labels
-                analyze_clusters(binary_access_matrix)
                 
+                # Analyze K-Means clusters
+                binary_access_matrix['k_means_clusters'] = kmeans_labels  # Assign K-Means labels with explicit name
+                analyze_clusters(binary_access_matrix)
+
+                # Analyze hierarchical clusters
+                binary_access_matrix.drop('k_means_clusters', axis=1, inplace=True)  # Clean up K-Means labels
+                analyze_hierarchical_clusters(binary_access_matrix, hierarchical_labels)
+                
+                # Sampling for dendrogram visualization using hierarchical clusters
+                binary_access_matrix['hierarchical_cluster'] = hierarchical_labels
                 subset_data = (
-                    binary_access_matrix.groupby('cluster')
-                    .apply(lambda x: x.sample(frac=sample_fraction, random_state=42) if len(x) * sample_fraction <= max_sample_size else x.sample(n=max_sample_size, random_state=42))
+                    binary_access_matrix.groupby('hierarchical_cluster')
+                    .apply(lambda x: x.sample(frac=sample_fraction, random_state=42) 
+                           if len(x) * sample_fraction <= max_sample_size else x.sample(n=max_sample_size, random_state=42))
                     .reset_index(drop=True)
-                    .drop('cluster', axis=1)
+                    .drop('hierarchical_cluster', axis=1)
                 )
                 
                 plot_dendrogram(subset_data, subset_data.index.tolist())
@@ -331,3 +404,5 @@ def run_pipeline(df, min_clusters=2, max_clusters=10, sample_fraction=0.1, max_s
         logger.error("An error occurred in run_pipeline:", exc_info=True)
         mlflow.log_param("run_pipeline_error", str(e))
         raise
+
+

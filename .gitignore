@@ -161,6 +161,8 @@ clusters/
 mlruns/
 dendrogram.png
 hierarchical_model.pkl
+hierarchical_clusters/
+k_means_clusters/
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
