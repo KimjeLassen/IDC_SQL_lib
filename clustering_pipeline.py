@@ -1,12 +1,13 @@
+import joblib
 import logging
 import traceback
 from db_base import engine
 import pandas as pd
-from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN
+
 import mlflow
 import mlflow.sklearn
 from mlflow.models.signature import infer_signature
-import joblib
+from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN
 
 from k_means_cluster import analyze_clusters, find_optimal_clusters
 from dbscan_cluster import analyze_dbscan_clusters, plot_k_distance
