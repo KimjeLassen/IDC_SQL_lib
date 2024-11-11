@@ -1,16 +1,19 @@
-#db_base.py
+# db_base.py
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 import connect
+
 
 class Base(DeclarativeBase):
     """
     Base class for all ORM models.
-    
-    Inherits from `DeclarativeBase`, which provides the foundation for SQLAlchemy's 
-    ORM functionality. Models created in the application will inherit from `Base`, 
+
+    Inherits from `DeclarativeBase`, which provides the foundation for SQLAlchemy's
+    ORM functionality. Models created in the application will inherit from `Base`,
     enabling them to map Python classes to database tables.
     """
+
     pass
+
 
 # Initialize the database engine using the connection details specified in `connect.py`
 engine = connect.engine()

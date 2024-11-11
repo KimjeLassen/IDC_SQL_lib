@@ -1,4 +1,4 @@
-#clustering_pipeline.py
+# clustering_pipeline.py
 import logging
 import mlflow
 import mlflow.sklearn
@@ -6,11 +6,16 @@ from sklearn.feature_extraction.text import TfidfTransformer
 from k_means_cluster import analyze_clusters, find_optimal_clusters
 from dbscan_cluster import analyze_dbscan_clusters, plot_k_distance, detect_eps
 from hierarchical_cluster import analyze_hierarchical_clusters, plot_dendrogram
-from data_manipulation import transform_to_binary_matrix, perform_dbscan, perform_kmeans_and_hierarchical
+from data_manipulation import (
+    transform_to_binary_matrix,
+    perform_dbscan,
+    perform_kmeans_and_hierarchical,
+)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def safe_start_run(run_name="Clustering_Run"):
     """
@@ -29,6 +34,7 @@ def safe_start_run(run_name="Clustering_Run"):
     mlflow.end_run()  # Ends any active run
     return mlflow.start_run(run_name=run_name)
 
+
 def run_pipeline(
     df,
     min_clusters=3,
@@ -36,7 +42,7 @@ def run_pipeline(
     sample_fraction=0.1,
     max_sample_size=500,
     dbscan_eps=None,
-    dbscan_min_samples=5
+    dbscan_min_samples=5,
 ):
     """
     Execute the full data processing and clustering pipeline.
@@ -89,14 +95,16 @@ def run_pipeline(
         with safe_start_run(run_name="Clustering_Run") as run:
             # Log pipeline parameters
             # Note: eps is currently being set automatically if not provided
-            mlflow.log_params({
-                "min_clusters": min_clusters,
-                "max_clusters": max_clusters,
-                "sample_fraction": sample_fraction,
-                "max_sample_size": max_sample_size,
-                "random_state": 42,
-                "dbscan_min_samples": dbscan_min_samples
-            })
+            mlflow.log_params(
+                {
+                    "min_clusters": min_clusters,
+                    "max_clusters": max_clusters,
+                    "sample_fraction": sample_fraction,
+                    "max_sample_size": max_sample_size,
+                    "random_state": 42,
+                    "dbscan_min_samples": dbscan_min_samples,
+                }
+            )
             mlflow.set_tag("pipeline", "Role Mining Clustering")
 
             if df is not None:
@@ -127,7 +135,9 @@ def run_pipeline(
                         mlflow.log_param("dbscan_eps_estimated", dbscan_eps)
                         print(f"Estimated eps value for DBSCAN: {dbscan_eps}")
                     else:
-                        print("Could not automatically estimate eps for DBSCAN. Using default value.")
+                        print(
+                            "Could not automatically estimate eps for DBSCAN. Using default value."
+                        )
                         mlflow.log_param("dbscan_eps_estimated", "None")
                 else:
                     mlflow.log_param("dbscan_eps_provided", dbscan_eps)
@@ -138,36 +148,40 @@ def run_pipeline(
                 )
 
                 # Perform DBSCAN clustering using binary data
-                dbscan_labels = perform_dbscan(dbscan_data, dbscan_eps, dbscan_min_samples)
+                dbscan_labels = perform_dbscan(
+                    dbscan_data, dbscan_eps, dbscan_min_samples
+                )
 
                 # Analyze K-Means clusters using original binary data
-                binary_access_matrix['k_means_clusters'] = kmeans_labels
+                binary_access_matrix["k_means_clusters"] = kmeans_labels
                 analyze_clusters(binary_access_matrix)
 
                 # Analyze hierarchical clusters
-                binary_access_matrix['hierarchical_cluster'] = hierarchical_labels
+                binary_access_matrix["hierarchical_cluster"] = hierarchical_labels
                 analyze_hierarchical_clusters(binary_access_matrix, hierarchical_labels)
 
                 # Analyze DBSCAN clusters
-                binary_access_matrix['dbscan_cluster'] = dbscan_labels
+                binary_access_matrix["dbscan_cluster"] = dbscan_labels
                 analyze_dbscan_clusters(binary_access_matrix, dbscan_labels)
 
                 # Get the list of feature names used during fit
                 cluster_label_columns = [
-                    'k_means_clusters',
-                    'hierarchical_cluster',
-                    'dbscan_cluster'
+                    "k_means_clusters",
+                    "hierarchical_cluster",
+                    "dbscan_cluster",
                 ]
-                feature_names = binary_access_matrix.columns.difference(cluster_label_columns)
+                feature_names = binary_access_matrix.columns.difference(
+                    cluster_label_columns
+                )
 
                 # Sampling for dendrogram visualization using hierarchical clusters
                 subset_data = (
-                    binary_access_matrix.groupby('hierarchical_cluster')
+                    binary_access_matrix.groupby("hierarchical_cluster")
                     .apply(
-                        lambda x: x.sample(
-                            frac=sample_fraction, random_state=42
-                        ) if len(x) * sample_fraction <= max_sample_size else x.sample(
-                            n=max_sample_size, random_state=42
+                        lambda x: (
+                            x.sample(frac=sample_fraction, random_state=42)
+                            if len(x) * sample_fraction <= max_sample_size
+                            else x.sample(n=max_sample_size, random_state=42)
                         )
                     )
                     .reset_index(drop=True)

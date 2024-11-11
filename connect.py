@@ -1,4 +1,4 @@
-#connect.py
+# connect.py
 from sqlalchemy import create_engine
 import logging
 import pandas as pd
@@ -10,16 +10,17 @@ import os
 # Load environment variables from .env file for database credentials
 load_dotenv()
 
-db_user = os.getenv('DB_USER')
-db_password = os.getenv('DB_PASSWORD')
-db_host = os.getenv('DB_HOST')
-db_port = os.getenv('DB_PORT')
-db_name = os.getenv('DB_NAME')
-conn_string = f'mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}'
+db_user = os.getenv("DB_USER")
+db_password = os.getenv("DB_PASSWORD")
+db_host = os.getenv("DB_HOST")
+db_port = os.getenv("DB_PORT")
+db_name = os.getenv("DB_NAME")
+conn_string = f"mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def engine():
     """
@@ -33,20 +34,21 @@ def engine():
     engine = create_engine(conn_string)
     return engine
 
+
 def fetch_data(sql_query):
     """
     Execute a SQL query and retrieve data from the specified database.
-    
+
     Parameters
     ----------
     sql_query : str
         The SQL query string to execute.
-    
+
     Returns
     -------
     DataFrame or None
         A DataFrame containing the retrieved data, or None if an error occurs.
-    
+
     Logging
     -------
     Logs the shape of the data (number of rows and columns) if data is successfully fetched.

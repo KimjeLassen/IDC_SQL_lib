@@ -1,0 +1,24 @@
+[tool.black]
+line-length = 88
+target-version = ['py37']
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | venv
+  | \.env
+  | \.ipynb_checkpoints
+  | __pycache__
+  | mlruns
+  | dbscan_clusters
+  | hierarchical_clusters
+  | k_means_clusters
+  | dendrogram\.png
+  | k_distance_plot\.png
+  | hierarchical_model\.pkl
+  | dbscan_model\.pkl
+  | build
+  | dist
+  | Testing\.ipynb
+)/
+'''
