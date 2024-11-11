@@ -3,10 +3,20 @@ import logging
 import mlflow
 import mlflow.sklearn
 from sklearn.feature_extraction.text import TfidfTransformer
-from k_means_cluster import analyze_clusters, find_optimal_clusters
-from dbscan_cluster import analyze_dbscan_clusters, plot_k_distance, detect_eps
-from hierarchical_cluster import analyze_hierarchical_clusters, plot_dendrogram
-from data_manipulation import (
+from clustering.kmeans.k_means_cluster import (
+    analyze_clusters,
+    find_optimal_clusters,
+)
+from clustering.dbscan.dbscan_cluster import (
+    analyze_dbscan_clusters,
+    plot_k_distance,
+    detect_eps,
+)
+from clustering.hierarchical.hierarchical_cluster import (
+    analyze_hierarchical_clusters,
+    plot_dendrogram,
+)
+from clustering.data_manipulation.data_manipulation import (
     transform_to_binary_matrix,
     perform_dbscan,
     perform_kmeans_and_hierarchical,
@@ -143,7 +153,10 @@ def run_pipeline(
                     mlflow.log_param("dbscan_eps_provided", dbscan_eps)
 
                 # Perform K-Means and Agglomerative Clustering using TF-IDF-transformed data
-                kmeans_labels, hierarchical_labels = perform_kmeans_and_hierarchical(
+                (
+                    kmeans_labels,
+                    hierarchical_labels,
+                ) = perform_kmeans_and_hierarchical(
                     clustering_data, optimal_cluster_count
                 )
 

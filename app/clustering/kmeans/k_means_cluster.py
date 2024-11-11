@@ -148,7 +148,8 @@ def find_optimal_clusters(data, min_clusters, max_clusters):
                 exc_info=True,
             )
             mlflow.log_text(
-                error_trace, f"find_optimal_clusters_error_n_clusters_{n_clusters}.txt"
+                error_trace,
+                f"find_optimal_clusters_error_n_clusters_{n_clusters}.txt",
             )
             mlflow.log_param(f"error_n_clusters_{n_clusters}", str(e))
 

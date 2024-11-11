@@ -1,6 +1,6 @@
 # Main.py
-from connect import db_name, fetch_data
-from clustering_pipeline import run_pipeline
+from database.connect import db_name, fetch_data
+from clustering.clustering_pipeline import run_pipeline
 
 # Define the SQL query to fetch user roles and system roles from the database
 sql_query = f"""

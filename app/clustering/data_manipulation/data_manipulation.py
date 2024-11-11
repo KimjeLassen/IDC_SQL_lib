@@ -4,7 +4,7 @@ import mlflow
 import joblib
 import traceback
 from mlflow.models.signature import infer_signature
-from connect import logger
+from database.connect import logger
 from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN
 from sklearn.metrics import silhouette_score
 
@@ -80,7 +80,10 @@ def perform_kmeans_and_hierarchical(data, n_clusters):
         input_example = data[:1]
         signature = infer_signature(data, kmeans.predict(data))
         mlflow.sklearn.log_model(
-            kmeans, "kmeans_model", signature=signature, input_example=input_example
+            kmeans,
+            "kmeans_model",
+            signature=signature,
+            input_example=input_example,
         )
 
         # Agglomerative Clustering
@@ -144,7 +147,10 @@ def perform_dbscan(data, dbscan_eps, dbscan_min_samples):
         dbscan = DBSCAN(eps=dbscan_eps, min_samples=dbscan_min_samples)
         dbscan_labels = dbscan.fit_predict(data)
         mlflow.log_params(
-            {"dbscan_eps": dbscan_eps, "dbscan_min_samples": dbscan_min_samples}
+            {
+                "dbscan_eps": dbscan_eps,
+                "dbscan_min_samples": dbscan_min_samples,
+            }
         )
 
         # Calculate and log the silhouette score if there are sufficient clusters

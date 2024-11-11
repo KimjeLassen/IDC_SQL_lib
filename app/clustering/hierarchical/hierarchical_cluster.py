@@ -62,7 +62,6 @@ def analyze_hierarchical_clusters(binary_access_matrix, hierarchical_labels):
     clusters = binary_access_matrix.groupby("hierarchical_cluster")
 
     for cluster_label, cluster_data in clusters:
-
         print(f"\nHierarchical Cluster {cluster_label}:")
 
         # Drop all cluster label columns
