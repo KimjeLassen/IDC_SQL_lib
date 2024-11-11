@@ -19,7 +19,7 @@ repos:
     hooks:
       - id: run-tests
         name: Run Unit Tests
-        entry: pytest
+        entry: pytest --cov=app --cov-fail-under=90
         language: system
         types: [python]
         pass_filenames: false

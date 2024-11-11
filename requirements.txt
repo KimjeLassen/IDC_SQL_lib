@@ -11,3 +11,6 @@ mlflow
 kneed
 black
 pre-commit
+pytest
+flake8
+pytest-cov
