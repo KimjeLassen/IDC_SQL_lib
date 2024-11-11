@@ -2,9 +2,9 @@
 Installation Guide:
 For the purposes of this guide, VS Code will be used as IDE of choice.
 1. Install Jupyter
-    1. Optional: Use Anaconda to install Jupyter 
+    1. Optional: Use Anaconda to install Jupyter
 2. Install the Python extension in VS Code and a Python distribution to your local PC
-3. Press Ctrl+Shift+P to run a VS Code command 
+3. Press Ctrl+Shift+P to run a VS Code command
 4. Search Python: Select Interpreter ![alt text](https://i.gyazo.com/638b9c35015c0ca23b790fe537704bd0.png)
 5. Press "Create Virtual Environment"
     1. Then choose Venv

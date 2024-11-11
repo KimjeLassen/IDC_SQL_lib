@@ -117,7 +117,7 @@ def run_pipeline(
             )
             mlflow.set_tag("pipeline", "Role Mining Clustering")
 
-            if df is not None:
+            if df is not None and not df.empty:
                 # Transform to binary access matrix
                 binary_access_matrix = transform_to_binary_matrix(df)
 
@@ -189,7 +189,9 @@ def run_pipeline(
 
                 # Sampling for dendrogram visualization using hierarchical clusters
                 subset_data = (
-                    binary_access_matrix.groupby("hierarchical_cluster")
+                    binary_access_matrix.groupby(
+                        "hierarchical_cluster", group_keys=False
+                    )
                     .apply(
                         lambda x: (
                             x.sample(frac=sample_fraction, random_state=42)
