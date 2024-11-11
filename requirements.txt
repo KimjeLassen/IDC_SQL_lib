@@ -9,3 +9,5 @@ scikit-learn
 matplotlib
 mlflow
 kneed
+black
+pre-commit
