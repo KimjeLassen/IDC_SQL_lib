@@ -1,7 +1,6 @@
 import unittest
 import numpy as np
 import pandas as pd
-from sklearn.exceptions import NotFittedError
 from clustering.data_manipulation.data_manipulation import (
     transform_to_binary_matrix,
     perform_kmeans_and_hierarchical,

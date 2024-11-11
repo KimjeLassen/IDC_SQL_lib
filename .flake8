@@ -1,0 +1,6 @@
+[flake8]
+max-line-length = 88
+exclude = .git, .venv, __pycache__, .pytest_cache, venv, .env, mlruns, dbscan_clusters, hierarchical_clusters, k_means_clusters
+# Restrict Flake8 to only check files within the `app` directory
+paths = app/
+ignore = E501

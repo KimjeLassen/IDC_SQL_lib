@@ -102,7 +102,7 @@ def run_pipeline(
     """
     mlflow.set_experiment("Role Mining Clustering Experiment")
     try:
-        with safe_start_run(run_name="Clustering_Run") as run:
+        with safe_start_run(run_name="Clustering_Run"):
             # Log pipeline parameters
             # Note: eps is currently being set automatically if not provided
             mlflow.log_params(
