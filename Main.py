@@ -1,7 +1,7 @@
 from connect import db_name, fetch_data
 from clustering_pipeline import run_pipeline
 
-# Main pipeline execution
+# Define the SQL query to fetch user roles and system roles from the database
 sql_query = f"""
     SELECT 
         urm.user_id,
@@ -14,7 +14,8 @@ sql_query = f"""
         {db_name}.system_roles sr ON sra.system_role_id = sr.id;
 """
 
-# Execute the data fetching process
+# Fetch data from the database using the defined SQL query
 df = fetch_data(sql_query)
 
+# Run the clustering pipeline with the fetched data
 run_pipeline(df)

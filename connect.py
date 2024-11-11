@@ -6,7 +6,8 @@ import traceback
 from dotenv import load_dotenv
 import os
 
-load_dotenv()  # Load environment variables from .env file
+# Load environment variables from .env file for database credentials
+load_dotenv()
 
 db_user = os.getenv('DB_USER')
 db_password = os.getenv('DB_PASSWORD')
@@ -20,12 +21,20 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def engine():
+    """
+    Initialize and return a SQLAlchemy engine for database connections.
+
+    Returns
+    -------
+    engine : SQLAlchemy Engine
+        A SQLAlchemy engine instance configured with the provided connection string.
+    """
     engine = create_engine(conn_string)
     return engine
 
 def fetch_data(sql_query):
     """
-    Fetch data from the database using the provided SQL query.
+    Execute a SQL query and retrieve data from the specified database.
     
     Parameters
     ----------
@@ -35,16 +44,21 @@ def fetch_data(sql_query):
     Returns
     -------
     DataFrame or None
-        The data retrieved from the database as a pandas DataFrame,
-        or None if an error occurs.
+        A DataFrame containing the retrieved data, or None if an error occurs.
+    
+    Logging
+    -------
+    Logs the shape of the data (number of rows and columns) if data is successfully fetched.
+    Logs and tracks errors in MLflow if data retrieval fails.
     """
     try:
         df = pd.read_sql(sql_query, engine())
         logger.info("Data loaded successfully from the database.")
-        # Log data shape
+        # Log the shape of the retrieved data for reference
         mlflow.log_param("data_shape", df.shape)
         return df
     except Exception as e:
+        # Capture and log any errors that occur during data fetching
         error_trace = traceback.format_exc()
         logger.error("An error occurred while fetching data:", exc_info=True)
         mlflow.log_text(error_trace, "fetch_error_trace.txt")
