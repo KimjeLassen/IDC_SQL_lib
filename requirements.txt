@@ -14,3 +14,6 @@ pre-commit
 pytest
 flake8
 pytest-cov
+fastapi
+uvicorn[standard]
+pydantic
