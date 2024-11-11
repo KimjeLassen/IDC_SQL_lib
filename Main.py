@@ -1,5 +1,5 @@
-from connect import db_name
-from clustering_pipeline import fetch_data, run_pipeline
+from connect import db_name, fetch_data
+from clustering_pipeline import run_pipeline
 
 # Main pipeline execution
 sql_query = f"""

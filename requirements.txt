@@ -5,7 +5,6 @@ jupyter
 ipykernel
 python-dotenv
 pandas
-kneed
 scikit-learn
 matplotlib
 mlflow

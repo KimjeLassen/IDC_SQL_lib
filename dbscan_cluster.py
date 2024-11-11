@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import logging
 import traceback
 
+# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 

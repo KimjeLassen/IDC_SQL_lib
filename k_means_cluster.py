@@ -6,6 +6,7 @@ import logging
 import traceback
 from sklearn.cluster import KMeans
 
+# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
