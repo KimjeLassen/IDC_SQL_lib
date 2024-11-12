@@ -1,4 +1,4 @@
-# connect.py
+# app/database/connect.py
 from sqlalchemy import create_engine
 import logging
 import pandas as pd

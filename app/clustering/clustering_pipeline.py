@@ -1,4 +1,4 @@
-# clustering_pipeline.py
+# app/clustering/clustering_pipeline.py
 import logging
 import mlflow
 import mlflow.sklearn

@@ -1,4 +1,4 @@
-# data_manipulation.py
+# app/clustering/data_manipulation/data_manipulation.py
 import pandas as pd
 import mlflow
 import joblib

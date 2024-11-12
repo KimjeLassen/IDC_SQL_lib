@@ -1,4 +1,4 @@
-# Main.py
+# app/Main.py
 from database.connect import db_name, fetch_data
 from clustering.clustering_pipeline import run_pipeline
 

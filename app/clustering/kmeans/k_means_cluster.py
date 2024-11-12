@@ -1,4 +1,4 @@
-# k_means_cluster.py
+# app/clustering/kmeans/k_means_cluster.py
 import os
 import glob
 import mlflow

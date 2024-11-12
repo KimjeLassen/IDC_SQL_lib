@@ -1,4 +1,4 @@
-# db_base.py
+# app/database/db_base.py
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 import database.connect as connect
 

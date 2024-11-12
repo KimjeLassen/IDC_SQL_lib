@@ -1,4 +1,4 @@
-# hierarchical_cluster.py
+# app/clustering/hierarchical/hierarchical_cluster.py
 import os
 import glob
 import mlflow

@@ -1,4 +1,4 @@
-# dbscan_cluster.py
+# app/clustering/dbscan/dbscan_cluster.py
 from sklearn.neighbors import NearestNeighbors
 import numpy as np
 import os
