@@ -4,9 +4,13 @@ import mlflow
 import joblib
 import traceback
 from mlflow.models.signature import infer_signature
-from database.connect import logger
+import logging
 from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN
 from sklearn.metrics import silhouette_score
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def transform_to_binary_matrix(df):

@@ -1,4 +1,5 @@
 # app/clustering/dbscan/dbscan_cluster.py
+
 from sklearn.neighbors import NearestNeighbors
 import numpy as np
 import os
@@ -10,37 +11,12 @@ import traceback
 from kneed import KneeLocator
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 def analyze_dbscan_clusters(binary_access_matrix, dbscan_labels):
     """
     Analyze and validate each DBSCAN cluster's contents by summarizing the privileges present in each cluster.
-
-    Parameters
-    ----------
-    binary_access_matrix : DataFrame
-        The binary access matrix where each row represents a user and each column represents a role.
-    dbscan_labels : array-like
-        The cluster labels assigned by DBSCAN, where -1 indicates noise points (outliers).
-
-    Returns
-    -------
-    None
-
-    MLflow Logging
-    --------------
-    Saves each cluster's data to CSV files, which are logged as artifacts.
-
-    Details
-    -------
-    - For each cluster (including noise points), calculates:
-        - Total number of users.
-        - Percentage of users in the cluster that possess each privilege.
-        - Privileges common to more than 50% of the cluster.
-        - Top 5 most common privileges.
-        - Privileges unique to the cluster (if present in 100% of users).
     """
     cluster_dir = "dbscan_clusters"
     os.makedirs(cluster_dir, exist_ok=True)
@@ -64,9 +40,9 @@ def analyze_dbscan_clusters(binary_access_matrix, dbscan_labels):
 
     for cluster_label, cluster_data in clusters:
         if cluster_label == -1:
-            print("\nDBSCAN Noise Points (label -1):")
+            logger.info("\nDBSCAN Noise Points (label -1):")
         else:
-            print(f"\nDBSCAN Cluster {cluster_label}:")
+            logger.info(f"\nDBSCAN Cluster {cluster_label}:")
 
         # Drop all cluster label columns
         cluster_privileges = cluster_data.drop(
@@ -82,23 +58,23 @@ def analyze_dbscan_clusters(binary_access_matrix, dbscan_labels):
             privilege_percentages > 50
         ].sort_values(ascending=False)
 
-        print(f"\nNumber of users in cluster: {len(cluster_data)}")
-        print("\nCommon privileges (present in over 50% of users):")
-        print(common_privileges)
+        logger.info(f"\nNumber of users in cluster: {len(cluster_data)}")
+        logger.info("\nCommon privileges (present in over 50% of users):")
+        logger.info(common_privileges.to_string())
 
         # List the top N privileges in the cluster
         top_n = 5
         top_roles = privilege_percentages.sort_values(ascending=False).head(top_n)
-        print(f"\nTop {top_n} privileges in the cluster:")
-        print(top_roles)
+        logger.info(f"\nTop {top_n} privileges in the cluster:")
+        logger.info(top_roles.to_string())
 
         # Identify roles unique to this cluster
         unique_roles = privilege_percentages[privilege_percentages == 100]
         if not unique_roles.empty:
-            print(
+            logger.info(
                 "\nPrivileges unique to this cluster (present in all users of the cluster):"
             )
-            print(unique_roles)
+            logger.info(unique_roles.to_string())
 
         # Save and log each cluster's data
         cluster_file = os.path.join(
@@ -111,27 +87,6 @@ def analyze_dbscan_clusters(binary_access_matrix, dbscan_labels):
 def plot_k_distance(data, min_samples):
     """
     Generate a k-distance plot to help estimate the optimal `eps` value for DBSCAN.
-
-    Parameters
-    ----------
-    data : DataFrame or array-like
-        The dataset to analyze.
-    min_samples : int
-        Number of nearest neighbors to consider, typically set to the `min_samples` parameter in DBSCAN.
-
-    Returns
-    -------
-    k_distances : array
-        Array of sorted distances to the `min_samples`-th nearest neighbor for each point.
-
-    MLflow Logging
-    --------------
-    Saves the k-distance plot as an artifact.
-
-    Details
-    -------
-    - Uses NearestNeighbors to calculate distances.
-    - Plots distances sorted in ascending order to visualize the "elbow," which indicates the optimal `eps`.
     """
     try:
         # Convert sparse matrix to dense if needed
@@ -166,21 +121,6 @@ def plot_k_distance(data, min_samples):
 def detect_eps(k_distances):
     """
     Estimate the optimal `eps` value for DBSCAN by detecting the "elbow" point in the k-distance plot.
-
-    Parameters
-    ----------
-    k_distances : array
-        Sorted distances to the `min_samples`-th nearest neighbor, typically output from `plot_k_distance`.
-
-    Returns
-    -------
-    float or None
-        Estimated `eps` value if an elbow is detected; otherwise, None.
-
-    Details
-    -------
-    - Uses the KneeLocator to identify the "knee" (elbow) point, where the curve shows the most significant change in slope.
-    - The detected `eps` is generally the value at the knee index in `k_distances`.
     """
     indices = np.arange(len(k_distances))
     kneedle = KneeLocator(

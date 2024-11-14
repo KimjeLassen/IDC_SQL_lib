@@ -1,6 +1,6 @@
 # app/database/db_base.py
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
-import database.connect as connect
+import app.database.connect as connect
 
 
 class Base(DeclarativeBase):

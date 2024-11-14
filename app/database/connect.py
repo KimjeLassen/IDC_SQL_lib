@@ -36,32 +36,14 @@ def engine():
 
 
 def fetch_data(sql_query):
-    """
-    Execute a SQL query and retrieve data from the specified database.
-
-    Parameters
-    ----------
-    sql_query : str
-        The SQL query string to execute.
-
-    Returns
-    -------
-    DataFrame or None
-        A DataFrame containing the retrieved data, or None if an error occurs.
-
-    Logging
-    -------
-    Logs the shape of the data (number of rows and columns) if data is successfully fetched.
-    Logs and tracks errors in MLflow if data retrieval fails.
-    """
     try:
         df = pd.read_sql(sql_query, engine())
         logger.info("Data loaded successfully from the database.")
-        # Log the shape of the retrieved data for reference
+        logger.info(f"Data shape: {df.shape}")
+        logger.info(f"Data sample:\n{df.head()}")
         mlflow.log_param("data_shape", df.shape)
         return df
     except Exception as e:
-        # Capture and log any errors that occur during data fetching
         error_trace = traceback.format_exc()
         logger.error("An error occurred while fetching data:", exc_info=True)
         mlflow.log_text(error_trace, "fetch_error_trace.txt")
