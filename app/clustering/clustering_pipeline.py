@@ -10,12 +10,11 @@ from app.clustering.kmeans.k_means_cluster import (
 )
 from app.clustering.dbscan.dbscan_cluster import (
     analyze_dbscan_clusters,
-    plot_k_distance,
+    calculate_k_distance,
     detect_eps,
 )
 from app.clustering.hierarchical.hierarchical_cluster import (
     analyze_hierarchical_clusters,
-    plot_dendrogram,
 )
 from app.clustering.data_manipulation.data_manipulation import (
     transform_to_binary_matrix,
@@ -174,8 +173,8 @@ def run_pipeline(
                     # Prepare binary data for DBSCAN
                     dbscan_data = binary_access_matrix.values
 
-                    # K-distance plot to help determine eps for DBSCAN using binary data
-                    k_distances = plot_k_distance(dbscan_data, dbscan_min_samples)
+                    # K-distance calculation to help determine eps for DBSCAN using binary data
+                    k_distances = calculate_k_distance(dbscan_data, dbscan_min_samples)
 
                     # Automatically detect the elbow point to estimate eps
                     if dbscan_eps is None:
@@ -212,7 +211,7 @@ def run_pipeline(
                 logger.info("Extracting cluster details...")
 
                 CLUSTERING_RESULTS[run_id] = extract_cluster_details(
-                    binary_access_matrix, algorithm, sample_fraction, max_sample_size
+                    binary_access_matrix, algorithm
                 )
 
                 logger.info("Cluster details extracted and stored.")
@@ -229,9 +228,7 @@ def run_pipeline(
         raise
 
 
-def extract_cluster_details(
-    binary_access_matrix, algorithm, sample_fraction, max_sample_size
-):
+def extract_cluster_details(binary_access_matrix, algorithm):
     """
     Extract cluster details to be returned by the API.
     """
@@ -267,33 +264,6 @@ def extract_cluster_details(
         cluster_details.append(
             {"cluster_label": label, "user_ids": user_ids, "role_details": role_details}
         )
-
-    # Optional: Perform sampling and generate dendrogram if hierarchical clustering
-    if algorithm == "hierarchical":
-        feature_names = binary_access_matrix.columns.difference([label_column])
-
-        subset_data = (
-            binary_access_matrix.groupby(label_column, group_keys=False)
-            .apply(
-                lambda x: (
-                    x.sample(frac=sample_fraction, random_state=42)
-                    if len(x) * sample_fraction <= max_sample_size
-                    else x.sample(n=max_sample_size, random_state=42)
-                )
-            )
-            .reset_index(drop=True)
-        )
-
-        # Select only the original feature columns
-        subset_data = subset_data[feature_names]
-
-        # Transform subset data for plotting (using TF-IDF)
-        tfidf_transformer = TfidfTransformer()
-        subset_tfidf = tfidf_transformer.fit_transform(subset_data)
-        subset_tfidf_dense = subset_tfidf.toarray()
-
-        # Plot dendrogram using the subset of transformed data
-        plot_dendrogram(subset_tfidf_dense, subset_data.index.tolist())
 
     return cluster_details
 

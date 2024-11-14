@@ -5,7 +5,6 @@ import numpy as np
 import os
 import glob
 import mlflow
-import matplotlib.pyplot as plt
 import logging
 import traceback
 from kneed import KneeLocator
@@ -16,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 def analyze_dbscan_clusters(binary_access_matrix, dbscan_labels):
     """
-    Analyze and validate each DBSCAN cluster's contents by summarizing the privileges present in each cluster.
+    Analyze DBSCAN clusters without verbose logging.
     """
     cluster_dir = "dbscan_clusters"
     os.makedirs(cluster_dir, exist_ok=True)
@@ -28,55 +27,13 @@ def analyze_dbscan_clusters(binary_access_matrix, dbscan_labels):
     for file in glob.glob(os.path.join(cluster_dir, "*.csv")):
         os.remove(file)
 
-    # Define cluster label columns to drop for analysis
-    cluster_label_columns = [
-        "k_means_clusters",
-        "hierarchical_cluster",
-        "dbscan_cluster",
-    ]
-
     # Group data by DBSCAN clusters
     clusters = binary_access_matrix.groupby("dbscan_cluster")
 
     for cluster_label, cluster_data in clusters:
-        if cluster_label == -1:
-            logger.info("\nDBSCAN Noise Points (label -1):")
-        else:
-            logger.info(f"\nDBSCAN Cluster {cluster_label}:")
+        logger.info(f"Processing DBSCAN Cluster {cluster_label}")
 
-        # Drop all cluster label columns
-        cluster_privileges = cluster_data.drop(
-            columns=cluster_label_columns, errors="ignore"
-        )
-
-        # Compute the sum and percentage of each privilege in the cluster
-        privilege_sums = cluster_privileges.sum()
-        privilege_percentages = (privilege_sums / len(cluster_data)) * 100
-
-        # Identify privileges common to over 50% of users in the cluster
-        common_privileges = privilege_percentages[
-            privilege_percentages > 50
-        ].sort_values(ascending=False)
-
-        logger.info(f"\nNumber of users in cluster: {len(cluster_data)}")
-        logger.info("\nCommon privileges (present in over 50% of users):")
-        logger.info(common_privileges.to_string())
-
-        # List the top N privileges in the cluster
-        top_n = 5
-        top_roles = privilege_percentages.sort_values(ascending=False).head(top_n)
-        logger.info(f"\nTop {top_n} privileges in the cluster:")
-        logger.info(top_roles.to_string())
-
-        # Identify roles unique to this cluster
-        unique_roles = privilege_percentages[privilege_percentages == 100]
-        if not unique_roles.empty:
-            logger.info(
-                "\nPrivileges unique to this cluster (present in all users of the cluster):"
-            )
-            logger.info(unique_roles.to_string())
-
-        # Save and log each cluster's data
+        # Save each cluster's data as a CSV file
         cluster_file = os.path.join(
             cluster_dir, f"dbscan_cluster_{cluster_label}_data.csv"
         )
@@ -84,12 +41,11 @@ def analyze_dbscan_clusters(binary_access_matrix, dbscan_labels):
         mlflow.log_artifact(cluster_file, artifact_path="dbscan_cluster_data")
 
 
-def plot_k_distance(data, min_samples):
+def calculate_k_distance(data, min_samples):
     """
-    Generate a k-distance plot to help estimate the optimal `eps` value for DBSCAN.
+    Calculate k-distances without generating a plot.
     """
     try:
-        # Convert sparse matrix to dense if needed
         data_dense = data.toarray() if hasattr(data, "toarray") else data
 
         neighbors = NearestNeighbors(n_neighbors=min_samples)
@@ -97,24 +53,12 @@ def plot_k_distance(data, min_samples):
         distances, indices = neighbors_fit.kneighbors(data_dense)
         k_distances = np.sort(distances[:, min_samples - 1])
 
-        plt.figure(figsize=(10, 6))
-        plt.plot(k_distances)
-        plt.xlabel("Points sorted by distance")
-        plt.ylabel(f"Distance to {min_samples}-th nearest neighbor")
-        plt.title("K-distance Plot for DBSCAN")
-        plt.grid()
-        plt.savefig("k_distance_plot.png")
-        mlflow.log_artifact("k_distance_plot.png", artifact_path="plots")
-        plt.show()
-        plt.close()
-
         return k_distances
     except Exception as e:
-        # Log error and traceback if plotting fails
         error_trace = traceback.format_exc()
-        logger.error("An error occurred while plotting K-distance:", exc_info=True)
-        mlflow.log_text(error_trace, "plot_k_distance_error_trace.txt")
-        mlflow.log_param("plot_k_distance_error", str(e))
+        logger.error("An error occurred while calculating k-distances:", exc_info=True)
+        mlflow.log_text(error_trace, "calculate_k_distance_error_trace.txt")
+        mlflow.log_param("calculate_k_distance_error", str(e))
         raise
 
 

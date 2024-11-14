@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from clustering.dbscan.dbscan_cluster import (
     analyze_dbscan_clusters,
-    plot_k_distance,
+    calculate_k_distance,
     detect_eps,
 )
 from unittest.mock import patch
@@ -33,7 +33,7 @@ class TestDBSCANCluster(unittest.TestCase):
         min_samples = 2
 
         # Act: Call the function under test
-        k_distances = plot_k_distance(data, min_samples)
+        k_distances = calculate_k_distance(data, min_samples)
 
         # Assert: Verify the length of the k-distances array
         self.assertEqual(len(k_distances), len(data))

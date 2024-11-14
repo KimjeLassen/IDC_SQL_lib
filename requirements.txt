@@ -6,7 +6,6 @@ ipykernel
 python-dotenv
 pandas
 scikit-learn
-matplotlib
 mlflow
 kneed
 black
