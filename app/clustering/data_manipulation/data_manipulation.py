@@ -7,6 +7,9 @@ from mlflow.models.signature import infer_signature
 import logging
 from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN
 from sklearn.metrics import silhouette_score
+from sklearn.neighbors import NearestNeighbors
+import numpy as np
+from kneed import KneeLocator
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -192,3 +195,84 @@ def perform_dbscan(data, dbscan_eps, dbscan_min_samples):
         mlflow.log_text(error_trace, "dbscan_clustering_error_trace.txt")
         mlflow.log_param("dbscan_clustering_error", str(e))
         raise
+
+
+def calculate_k_distance(data, min_samples):
+    """
+    Calculate k-distances without generating a plot.
+    """
+    try:
+        data_dense = data.toarray() if hasattr(data, "toarray") else data
+
+        neighbors = NearestNeighbors(n_neighbors=min_samples)
+        neighbors_fit = neighbors.fit(data_dense)
+        distances, indices = neighbors_fit.kneighbors(data_dense)
+        k_distances = np.sort(distances[:, min_samples - 1])
+
+        return k_distances
+    except Exception as e:
+        error_trace = traceback.format_exc()
+        logger.error("An error occurred while calculating k-distances:", exc_info=True)
+        mlflow.log_text(error_trace, "calculate_k_distance_error_trace.txt")
+        mlflow.log_param("calculate_k_distance_error", str(e))
+        raise
+
+
+def detect_eps(k_distances):
+    """
+    Estimate the optimal `eps` value for DBSCAN by detecting the "elbow" point in the k-distance plot.
+    """
+    indices = np.arange(len(k_distances))
+    kneedle = KneeLocator(
+        indices, k_distances, S=1.0, curve="convex", direction="increasing"
+    )
+    elbow_index = kneedle.knee
+    if elbow_index is not None:
+        eps_estimated = k_distances[elbow_index]
+        return eps_estimated
+    else:
+        return None
+
+
+def find_optimal_clusters(data, min_clusters, max_clusters):
+    """
+    Determine the optimal number of clusters for K-Means using the silhouette score.
+    """
+    highest_silhouette_score = -1
+    optimal_n_clusters = min_clusters
+
+    for n_clusters in range(min_clusters, max_clusters + 1):
+        try:
+            # Initialize and fit the K-Means model
+            kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+            cluster_labels = kmeans.fit_predict(data)
+
+            # Calculate the silhouette score for the current number of clusters
+            silhouette_avg = silhouette_score(data, cluster_labels)
+            mlflow.log_metric("silhouette_score", silhouette_avg, step=n_clusters)
+
+            # Update the optimal number of clusters if the score improves
+            if silhouette_avg > highest_silhouette_score:
+                highest_silhouette_score = silhouette_avg
+                optimal_n_clusters = n_clusters
+        except Exception as e:
+            # Log any errors encountered during the process
+            error_trace = traceback.format_exc()
+            logger.error(
+                f"An error occurred while finding optimal clusters for n_clusters={n_clusters}:",
+                exc_info=True,
+            )
+            mlflow.log_text(
+                error_trace,
+                f"find_optimal_clusters_error_n_clusters_{n_clusters}.txt",
+            )
+            mlflow.log_param(f"error_n_clusters_{n_clusters}", str(e))
+
+    # Log the optimal number of clusters and the highest silhouette score
+    logger.info(
+        f"\nThe optimal number of clusters is: {optimal_n_clusters} with a K-Means silhouette score of {highest_silhouette_score}"
+    )
+    mlflow.log_param("optimal_n_clusters", optimal_n_clusters)
+    mlflow.log_metric("highest_silhouette_score", highest_silhouette_score)
+
+    return optimal_n_clusters

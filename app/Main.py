@@ -1,6 +1,6 @@
 # app/main.py
 from fastapi import FastAPI
-from app.api import clustering
+from app.api import cluster_api
 
 app = FastAPI(
     title="Clustering Microservice",
@@ -8,4 +8,4 @@ app = FastAPI(
     version="1.0.0",
 )
 
-app.include_router(clustering.router, prefix="/api/clustering", tags=["Clustering"])
+app.include_router(cluster_api.router, prefix="/api/clustering", tags=["Clustering"])
