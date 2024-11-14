@@ -33,12 +33,12 @@ CLUSTERING_RESULTS = {}
 RUN_STATUS = {}
 
 
-def safe_start_run(run_id, run_name="Clustering_Run"):
+def safe_start_run(run_name="Clustering_Run"):
     """
     Safely start an MLflow run by ending any active runs first.
     """
     mlflow.end_run()  # Ends any active run
-    mlflow.start_run(run_name=run_name, run_id=run_id)
+    mlflow.start_run(run_name=run_name)
     return mlflow.active_run()
 
 
@@ -82,10 +82,12 @@ def run_pipeline(
 
     mlflow.set_experiment("Role Mining Clustering Experiment")
     try:
-        with safe_start_run(run_id=run_id, run_name="Clustering_Run"):
+        with safe_start_run(run_name="Clustering_Run"):
+            logger.info("Starting clustering pipeline...")
+
             # Log pipeline parameters
             params = {
-                "algorithm": algorithm,
+                "clustering_algorithm": algorithm,
                 "min_clusters": min_clusters,
                 "max_clusters": max_clusters,
                 "sample_fraction": sample_fraction,
@@ -100,31 +102,62 @@ def run_pipeline(
 
             if df is not None and not df.empty:
                 # Transform to binary access matrix
+                logger.info("Transforming data to binary access matrix...")
+
                 binary_access_matrix = transform_to_binary_matrix(df)
 
+                logger.info("Data transformation complete.")
+
                 if algorithm in ["kmeans", "hierarchical"]:
+                    logger.info(
+                        f"Preparing TF-IDF transformation for {algorithm} clustering..."
+                    )
+
                     # Prepare TF-IDF-transformed data
                     tfidf_transformer = TfidfTransformer()
                     tfidf_matrix = tfidf_transformer.fit_transform(binary_access_matrix)
                     clustering_data = tfidf_matrix.toarray()
 
+                    logger.info("TF-IDF transformation complete.")
+
                     # Find the optimal number of clusters using silhouette score
+                    logger.info(
+                        f"Finding the optimal number of clusters for {algorithm}..."
+                    )
+
                     optimal_cluster_count = find_optimal_clusters(
                         clustering_data, min_clusters, max_clusters
                     )
 
+                    logger.info(f"Optimal number of clusters: {optimal_cluster_count}")
+
                     # Perform K-Means and/or Hierarchical Clustering
                     if algorithm == "kmeans":
+                        logger.info("Performing K-Means clustering...")
+
                         kmeans_labels, _ = perform_kmeans_and_hierarchical(
                             clustering_data, optimal_cluster_count
                         )
                         # Analyze K-Means clusters using original binary data
                         binary_access_matrix["k_means_clusters"] = kmeans_labels
+
+                        logger.info("K-Means clustering complete.")
+                        logger.info("Analyzing K-Means clusters...")
+
                         analyze_clusters(binary_access_matrix)
+
+                        logger.info("K-Means cluster analysis complete.")
+
                     elif algorithm == "hierarchical":
+                        logger.info("Performing Hierarchical clustering...")
+
                         _, hierarchical_labels = perform_kmeans_and_hierarchical(
                             clustering_data, optimal_cluster_count
                         )
+
+                        logger.info("Hierarchical clustering complete.")
+                        logger.info("Analyzing Hierarchical clusters...")
+
                         # Analyze hierarchical clusters
                         binary_access_matrix[
                             "hierarchical_cluster"
@@ -133,7 +166,11 @@ def run_pipeline(
                             binary_access_matrix, hierarchical_labels
                         )
 
+                        logger.info("Hierarchical cluster analysis complete.")
+
                 elif algorithm == "dbscan":
+                    logger.info("Preparing data for DBSCAN clustering...")
+
                     # Prepare binary data for DBSCAN
                     dbscan_data = binary_access_matrix.values
 
@@ -155,20 +192,35 @@ def run_pipeline(
                     else:
                         mlflow.log_param("dbscan_eps_provided", dbscan_eps)
 
+                    logger.info("Performing DBSCAN clustering...")
+
                     # Perform DBSCAN clustering using binary data
                     dbscan_labels = perform_dbscan(
                         dbscan_data, dbscan_eps, dbscan_min_samples
                     )
                     binary_access_matrix["dbscan_cluster"] = dbscan_labels
+
+                    logger.info("DBSCAN clustering complete.")
+                    logger.info("Analyzing DBSCAN clusters...")
+
                     analyze_dbscan_clusters(binary_access_matrix, dbscan_labels)
 
+                    logger.info("DBSCAN cluster analysis complete.")
+
                 # Store results
+
+                logger.info("Extracting cluster details...")
+
                 CLUSTERING_RESULTS[run_id] = extract_cluster_details(
                     binary_access_matrix, algorithm, sample_fraction, max_sample_size
                 )
 
+                logger.info("Cluster details extracted and stored.")
+
                 # Update status as completed
                 RUN_STATUS[run_id] = "completed"
+
+                logger.info(f"Clustering run {run_id} completed successfully.")
 
     except Exception as e:
         logger.error("An error occurred in run_pipeline:", exc_info=True)

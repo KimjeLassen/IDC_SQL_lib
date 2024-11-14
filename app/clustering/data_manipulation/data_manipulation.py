@@ -77,7 +77,12 @@ def perform_kmeans_and_hierarchical(data, n_clusters):
         # KMeans clustering
         kmeans = KMeans(n_clusters=n_clusters, random_state=42)
         kmeans_labels = kmeans.fit_predict(data)
-        mlflow.log_params(kmeans.get_params())
+
+        # Retrieve and modify parameters to exclude 'algorithm'
+        kmeans_params = kmeans.get_params()
+        kmeans_params.pop("algorithm", None)  # Remove 'algorithm' key if present
+
+        mlflow.log_params(kmeans_params)
         mlflow.log_metric("kmeans_inertia", kmeans.inertia_)
 
         # Log the KMeans model to MLflow
@@ -93,12 +98,15 @@ def perform_kmeans_and_hierarchical(data, n_clusters):
         # Agglomerative Clustering
         hierarchical = AgglomerativeClustering(n_clusters=n_clusters)
         hierarchical_labels = hierarchical.fit_predict(data)
-        mlflow.log_params(hierarchical.get_params())
+        hierarchical_params = hierarchical.get_params()
+        hierarchical_params.pop("algorithm", None)  # Remove 'algorithm' key if present
+
+        mlflow.log_params(hierarchical_params)
 
         # Calculate and log the silhouette score for Agglomerative Clustering
         silhouette_avg = silhouette_score(data, hierarchical_labels)
         mlflow.log_metric("hierarchical_silhouette_score", silhouette_avg)
-        print(f"Agglomerative Clustering Silhouette Score: {silhouette_avg}")
+        logger.info(f"Agglomerative Clustering Silhouette Score: {silhouette_avg}")
 
         # Save the Agglomerative model as an artifact
         hierarchical_model_path = "hierarchical_model.pkl"
@@ -106,6 +114,7 @@ def perform_kmeans_and_hierarchical(data, n_clusters):
         mlflow.log_artifact(hierarchical_model_path, artifact_path="models")
 
         return kmeans_labels, hierarchical_labels
+
     except Exception as e:
         # Log error and traceback if clustering fails
         error_trace = traceback.format_exc()
@@ -150,12 +159,12 @@ def perform_dbscan(data, dbscan_eps, dbscan_min_samples):
         # DBSCAN clustering
         dbscan = DBSCAN(eps=dbscan_eps, min_samples=dbscan_min_samples)
         dbscan_labels = dbscan.fit_predict(data)
-        mlflow.log_params(
-            {
-                "dbscan_eps": dbscan_eps,
-                "dbscan_min_samples": dbscan_min_samples,
-            }
-        )
+
+        # Retrieve DBSCAN parameters and remove 'algorithm' if it exists
+        dbscan_params = dbscan.get_params()
+        dbscan_params.pop("algorithm", None)  # Remove 'algorithm' key if present
+
+        mlflow.log_params(dbscan_params)
 
         # Calculate and log the silhouette score if there are sufficient clusters
         n_clusters = len(set(dbscan_labels)) - (1 if -1 in dbscan_labels else 0)

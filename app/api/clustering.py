@@ -1,8 +1,8 @@
 # app/api/clustering.py
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, model_validator
+from typing import List, Optional, Literal
 import uuid
 import os
 import logging
@@ -23,11 +23,27 @@ router = APIRouter()
 
 
 class ClusteringRequest(BaseModel):
-    algorithm: str
+    algorithm: Literal["kmeans", "hierarchical", "dbscan"]
     min_clusters: Optional[int] = 3
     max_clusters: Optional[int] = 8
     dbscan_eps: Optional[float] = None
     dbscan_min_samples: Optional[int] = 5
+
+    @model_validator(mode="before")
+    def check_parameters(cls, values):
+        algorithm = values.get("algorithm")
+
+        if algorithm != "dbscan":
+            values["dbscan_eps"] = None
+            values["dbscan_min_samples"] = None
+        else:
+            dbscan_eps = values.get("dbscan_eps")
+            if dbscan_eps is None or dbscan_eps <= 0:
+                raise ValueError(
+                    "`dbscan_eps` must be a positive float for DBSCAN algorithm."
+                )
+
+        return values
 
 
 class ClusteringResponse(BaseModel):
@@ -40,8 +56,8 @@ class AlgorithmListResponse(BaseModel):
 
 
 class ClusterContent(BaseModel):
-    cluster_label: str  # Changed to str to accommodate "Noise"
-    user_ids: List[int]
+    cluster_label: str
+    user_ids: List[str]
     role_details: dict
 
 
