@@ -32,11 +32,9 @@ class TestClusteringPipeline(unittest.TestCase):
         mock_perform_dbscan,
         mock_perform_kmeans_and_hierarchical,
         mock_detect_eps,
-        mock_plot_k_distance,
         mock_find_optimal_clusters,
         mock_tfidf_transformer,
         mock_transform_to_binary_matrix,
-        mock_mlflow,
     ):
         """
         Test the `run_pipeline` function to ensure it executes the entire

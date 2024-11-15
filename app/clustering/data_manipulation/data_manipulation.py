@@ -3,14 +3,97 @@ import pandas as pd
 import mlflow
 import joblib
 import traceback
-from mlflow.models.signature import infer_signature
 import logging
 from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN
+from sklearn.neighbors import NearestNeighbors
+import numpy as np
+from kneed import KneeLocator
 from sklearn.metrics import silhouette_score
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def calculate_k_distance(data, min_samples):
+    """
+    Calculate k-distances without generating a plot.
+    """
+    try:
+        data_dense = data.toarray() if hasattr(data, "toarray") else data
+
+        neighbors = NearestNeighbors(n_neighbors=min_samples)
+        neighbors_fit = neighbors.fit(data_dense)
+        distances, indices = neighbors_fit.kneighbors(data_dense)
+        k_distances = np.sort(distances[:, min_samples - 1])
+
+        return k_distances
+    except Exception as e:
+        error_trace = traceback.format_exc()
+        logger.error("An error occurred while calculating k-distances:", exc_info=True)
+        mlflow.log_text(error_trace, "calculate_k_distance_error_trace.txt")
+        mlflow.log_param("calculate_k_distance_error", str(e))
+        raise
+
+
+def detect_eps(k_distances):
+    """
+    Estimate the optimal `eps` value for DBSCAN by detecting the "elbow" point in the k-distance plot.
+    """
+    indices = np.arange(len(k_distances))
+    kneedle = KneeLocator(
+        indices, k_distances, S=1.0, curve="convex", direction="increasing"
+    )
+    elbow_index = kneedle.knee
+    if elbow_index is not None:
+        eps_estimated = k_distances[elbow_index]
+        return eps_estimated
+    else:
+        return None
+
+
+def find_optimal_clusters(data, min_clusters, max_clusters):
+    """
+    Determine the optimal number of clusters for K-Means using the silhouette score.
+    """
+    highest_silhouette_score = -1
+    optimal_n_clusters = min_clusters
+
+    for n_clusters in range(min_clusters, max_clusters + 1):
+        try:
+            # Initialize and fit the K-Means model
+            kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+            cluster_labels = kmeans.fit_predict(data)
+
+            # Calculate the silhouette score for the current number of clusters
+            silhouette_avg = silhouette_score(data, cluster_labels)
+            mlflow.log_metric("silhouette_score", silhouette_avg, step=n_clusters)
+
+            # Update the optimal number of clusters if the score improves
+            if silhouette_avg > highest_silhouette_score:
+                highest_silhouette_score = silhouette_avg
+                optimal_n_clusters = n_clusters
+        except Exception as e:
+            # Log any errors encountered during the process
+            error_trace = traceback.format_exc()
+            logger.error(
+                f"An error occurred while finding optimal clusters for n_clusters={n_clusters}:",
+                exc_info=True,
+            )
+            mlflow.log_text(
+                error_trace,
+                f"find_optimal_clusters_error_n_clusters_{n_clusters}.txt",
+            )
+            mlflow.log_param(f"error_n_clusters_{n_clusters}", str(e))
+
+    # Log the optimal number of clusters and the highest silhouette score
+    logger.info(
+        f"\nThe optimal number of clusters is: {optimal_n_clusters} with a K-Means silhouette score of {highest_silhouette_score}"
+    )
+    mlflow.log_param("optimal_n_clusters", optimal_n_clusters)
+    mlflow.log_metric("highest_silhouette_score", highest_silhouette_score)
+
+    return optimal_n_clusters
 
 
 def transform_to_binary_matrix(df):
@@ -44,87 +127,20 @@ def transform_to_binary_matrix(df):
     return binary_access_matrix
 
 
-def perform_kmeans_and_hierarchical(data, n_clusters):
-    """
-    Apply KMeans and Agglomerative Clustering to TF-IDF-transformed data and log the results.
+def perform_kmeans(data, n_clusters):
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    kmeans_labels = kmeans.fit_predict(data)
+    # Log model parameters and metrics
+    mlflow.log_metric("kmeans_inertia", kmeans.inertia_)
+    return kmeans_labels
 
-    Parameters
-    ----------
-    data : array-like
-        The TF-IDF-transformed data to be clustered.
-    n_clusters : int
-        The number of clusters to form for both clustering methods.
 
-    Returns
-    -------
-    tuple
-        kmeans_labels : array
-            Cluster labels assigned by KMeans.
-        hierarchical_labels : array
-            Cluster labels assigned by Agglomerative Clustering.
-
-    MLflow Logging
-    --------------
-    - Logs model parameters and silhouette scores for each clustering method.
-    - Saves the KMeans and Agglomerative models as artifacts.
-
-    Raises
-    ------
-    Exception
-        If any error occurs during clustering, it logs the traceback and raises the error.
-    """
-    try:
-        # KMeans clustering
-        kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-        kmeans_labels = kmeans.fit_predict(data)
-
-        # Retrieve and modify parameters to exclude 'algorithm'
-        kmeans_params = kmeans.get_params()
-        kmeans_params.pop("algorithm", None)  # Remove 'algorithm' key if present
-
-        mlflow.log_params(kmeans_params)
-        mlflow.log_metric("kmeans_inertia", kmeans.inertia_)
-
-        # Log the KMeans model to MLflow
-        input_example = data[:1]
-        signature = infer_signature(data, kmeans.predict(data))
-        mlflow.sklearn.log_model(
-            kmeans,
-            "kmeans_model",
-            signature=signature,
-            input_example=input_example,
-        )
-
-        # Agglomerative Clustering
-        hierarchical = AgglomerativeClustering(n_clusters=n_clusters)
-        hierarchical_labels = hierarchical.fit_predict(data)
-        hierarchical_params = hierarchical.get_params()
-        hierarchical_params.pop("algorithm", None)  # Remove 'algorithm' key if present
-
-        mlflow.log_params(hierarchical_params)
-
-        # Calculate and log the silhouette score for Agglomerative Clustering
-        silhouette_avg = silhouette_score(data, hierarchical_labels)
-        mlflow.log_metric("hierarchical_silhouette_score", silhouette_avg)
-        logger.info(f"Agglomerative Clustering Silhouette Score: {silhouette_avg}")
-
-        # Save the Agglomerative model as an artifact
-        hierarchical_model_path = "hierarchical_model.pkl"
-        joblib.dump(hierarchical, hierarchical_model_path)
-        mlflow.log_artifact(hierarchical_model_path, artifact_path="models")
-
-        return kmeans_labels, hierarchical_labels
-
-    except Exception as e:
-        # Log error and traceback if clustering fails
-        error_trace = traceback.format_exc()
-        logger.error(
-            "An error occurred during K-Means and Agglomerative clustering:",
-            exc_info=True,
-        )
-        mlflow.log_text(error_trace, "kmeans_hierarchical_clustering_error_trace.txt")
-        mlflow.log_param("kmeans_hierarchical_clustering_error", str(e))
-        raise
+def perform_hierarchical(data, n_clusters):
+    hierarchical = AgglomerativeClustering(n_clusters=n_clusters)
+    hierarchical_labels = hierarchical.fit_predict(data)
+    silhouette_avg = silhouette_score(data, hierarchical_labels)
+    mlflow.log_metric("hierarchical_silhouette_score", silhouette_avg)
+    return hierarchical_labels
 
 
 def perform_dbscan(data, dbscan_eps, dbscan_min_samples):
@@ -174,9 +190,11 @@ def perform_dbscan(data, dbscan_eps, dbscan_min_samples):
                 data[core_samples_mask], dbscan_labels[core_samples_mask]
             )
             mlflow.log_metric("dbscan_silhouette_score", dbscan_silhouette)
-            print(f"DBSCAN Silhouette Score: {dbscan_silhouette}")
+            logger.info(f"DBSCAN Silhouette Score: {dbscan_silhouette}")
         else:
-            print("DBSCAN did not find enough clusters to compute silhouette score.")
+            logger.info(
+                "DBSCAN did not find enough clusters to compute silhouette score."
+            )
             mlflow.log_metric("dbscan_silhouette_score", float("nan"))
 
         # Save the DBSCAN model as an artifact

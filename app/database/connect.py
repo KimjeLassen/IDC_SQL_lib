@@ -38,9 +38,6 @@ def engine():
 def fetch_data(sql_query):
     try:
         df = pd.read_sql(sql_query, engine())
-        logger.info("Data loaded successfully from the database.")
-        logger.info(f"Data shape: {df.shape}")
-        logger.info(f"Data sample:\n{df.head()}")
         mlflow.log_param("data_shape", df.shape)
         return df
     except Exception as e:
