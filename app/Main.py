@@ -1,6 +1,10 @@
 # app/main.py
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from app.api import clustering
+
+
+load_dotenv()
 
 app = FastAPI(
     title="Clustering Microservice",

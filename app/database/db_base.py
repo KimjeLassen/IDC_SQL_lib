@@ -1,6 +1,6 @@
 # app/database/db_base.py
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
-import app.database.connect as connect
+from app.database.engine import get_engine
 
 
 class Base(DeclarativeBase):
@@ -15,11 +15,16 @@ class Base(DeclarativeBase):
     pass
 
 
-# Initialize the database engine using the connection details specified in `connect.py`
-engine = connect.engine()
+engine = get_engine()
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Create a session factory bound to the engine
-Session = sessionmaker(bind=engine)
 
-# Instantiate a session for executing database operations
-session = Session()
+def get_db():
+    """
+    Dependency that provides a SQLAlchemy session.
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

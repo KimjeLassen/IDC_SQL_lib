@@ -1,13 +1,15 @@
 # app/api/clustering.py
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel, model_validator
 from typing import List, Optional, Literal
 import uuid
-import os
 import logging
+from app.database.db_base import get_db
+from sqlalchemy.orm import Session
 
-from app.database.connect import fetch_data
+
+from app.database.fetch_data import fetch_data
 from app.clustering.clustering_pipeline import (
     run_pipeline,
     get_available_algorithms,
@@ -77,7 +79,11 @@ def list_available_algorithms():
 
 
 @router.post("/run", response_model=ClusteringResponse)
-def run_clustering(request: ClusteringRequest, background_tasks: BackgroundTasks):
+def run_clustering(
+    request: ClusteringRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     """
     Run clustering with the specified algorithm and parameters.
     """
@@ -85,19 +91,8 @@ def run_clustering(request: ClusteringRequest, background_tasks: BackgroundTasks
     if request.algorithm not in available_algorithms:
         raise HTTPException(status_code=400, detail="Invalid algorithm selected.")
 
-    # Fetch data using the existing SQL query
-    sql_query = f"""
-        SELECT
-            urm.user_id,
-            sr.name AS system_role_name
-        FROM
-            {os.getenv('DB_NAME')}.user_roles_mapping urm
-        JOIN
-            {os.getenv('DB_NAME')}.system_role_assignments sra ON urm.user_role_id = sra.user_role_id
-        JOIN
-            {os.getenv('DB_NAME')}.system_roles sr ON sra.system_role_id = sr.id;
-    """
-    df = fetch_data(sql_query)
+    # Fetch data using the provided session
+    df = fetch_data(db)
     if df is None or df.empty:
         raise HTTPException(
             status_code=500, detail="Failed to fetch data from the database."
