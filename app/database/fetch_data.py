@@ -1,9 +1,7 @@
 from sqlalchemy.orm import Session
 from app.database.models import UserRolesMapping, SystemRoleAssignments, SystemRoles
 import pandas as pd
-import mlflow
 import logging
-import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +23,7 @@ def fetch_data(db: Session):
 
         # Execute the query and load results into a DataFrame
         df = pd.read_sql(query.statement, db.bind)
-        mlflow.log_param("data_shape", df.shape)
         return df
-    except Exception as e:
-        error_trace = traceback.format_exc()
+    except Exception:
         logger.error("An error occurred while fetching data:", exc_info=True)
-        mlflow.log_text(error_trace, "fetch_error_trace.txt")
-        mlflow.log_param("fetch_error", str(e))
         return None

@@ -1,6 +1,4 @@
 import logging
-import mlflow
-import mlflow.sklearn
 from sklearn.feature_extraction.text import TfidfTransformer
 from app.clustering.data_manipulation.data_manipulation import (
     transform_to_binary_matrix,
@@ -22,13 +20,6 @@ CLUSTERING_RESULTS = {}
 RUN_STATUS = {}
 
 
-def safe_start_run(run_name="Clustering_Run"):
-    """Safely start an MLflow run by ending any active runs first."""
-    mlflow.end_run()
-    mlflow.start_run(run_name=run_name)
-    return mlflow.active_run()
-
-
 def get_available_algorithms():
     """Return a list of available clustering algorithms."""
     return ["kmeans", "hierarchical", "dbscan"]
@@ -37,15 +28,24 @@ def get_available_algorithms():
 def run_pipeline(
     df,
     algorithm,
+    n_clusters=None,
     min_clusters=3,
     max_clusters=8,
     sample_fraction=0.1,
     max_sample_size=500,
     dbscan_eps=None,
     dbscan_min_samples=5,
+    random_state=42,
+    kmeans_n_init=10,
+    kmeans_max_iter=300,
+    hierarchical_linkage="ward",
+    hierarchical_metric="euclidean",
+    dbscan_metric="euclidean",
+    dbscan_algorithm="auto",
     run_id=None,
 ):
     """Execute the clustering pipeline and store results."""
+
     if run_id is None:
         run_id = str(uuid.uuid4())
 
@@ -53,81 +53,124 @@ def run_pipeline(
     if not required_columns.issubset(df.columns):
         error_msg = f"Input DataFrame must contain columns: {required_columns}"
         logger.error(error_msg)
-        mlflow.log_param("input_validation_error", error_msg)
         RUN_STATUS[run_id] = "failed"
         raise ValueError(error_msg)
 
     RUN_STATUS[run_id] = "running"
-    mlflow.set_experiment("Role Mining Clustering Experiment")
 
     try:
-        with safe_start_run(run_name="Clustering_Run"):
-            logger.info("Starting clustering pipeline...")
-            params = {
-                "algorithm": algorithm,
-                "min_clusters": min_clusters,
-                "max_clusters": max_clusters,
-                "sample_fraction": sample_fraction,
-                "max_sample_size": max_sample_size,
-                "random_state": 42,
-                "dbscan_min_samples": dbscan_min_samples,
-            }
-            if algorithm == "dbscan":
-                params["dbscan_eps"] = dbscan_eps
-            mlflow.log_params(params)
+        logger.info("Starting clustering pipeline...")
+        params = {
+            "algorithm": algorithm,
+            "random_state": random_state,
+            "sample_fraction": sample_fraction,
+            "max_sample_size": max_sample_size,
+        }
+        if algorithm == "kmeans":
+            params.update(
+                {
+                    "n_clusters": n_clusters,
+                    "min_clusters": min_clusters,
+                    "max_clusters": max_clusters,
+                    "kmeans_n_init": kmeans_n_init,
+                    "kmeans_max_iter": kmeans_max_iter,
+                }
+            )
+        elif algorithm == "hierarchical":
+            params.update(
+                {
+                    "n_clusters": n_clusters,
+                    "min_clusters": min_clusters,
+                    "max_clusters": max_clusters,
+                    "hierarchical_linkage": hierarchical_linkage,
+                    "hierarchical_metric": hierarchical_metric,
+                }
+            )
+        elif algorithm == "dbscan":
+            params.update(
+                {
+                    "dbscan_eps": dbscan_eps,
+                    "dbscan_min_samples": dbscan_min_samples,
+                    "dbscan_metric": dbscan_metric,
+                    "dbscan_algorithm": dbscan_algorithm,
+                }
+            )
 
-            # Transform data to binary access matrix
-            binary_access_matrix = transform_to_binary_matrix(df)
+        logger.info(f"Clustering parameters: {params}")
 
-            # Apply TF-IDF transformation for K-Means and Hierarchical Clustering
-            if algorithm in ["kmeans", "hierarchical"]:
-                tfidf_transformer = TfidfTransformer()
-                tfidf_matrix = tfidf_transformer.fit_transform(binary_access_matrix)
-                clustering_data = tfidf_matrix.toarray()
+        # Transform data to binary access matrix
+        binary_access_matrix = transform_to_binary_matrix(df)
 
+        # Apply TF-IDF transformation for K-Means and Hierarchical Clustering
+        if algorithm in ["kmeans", "hierarchical"]:
+            tfidf_transformer = TfidfTransformer()
+            tfidf_matrix = tfidf_transformer.fit_transform(binary_access_matrix)
+            clustering_data = tfidf_matrix.toarray()
+
+            # Determine the number of clusters
+            if n_clusters is not None:
+                optimal_cluster_count = n_clusters
+            else:
                 # Determine the optimal number of clusters
                 optimal_cluster_count = find_optimal_clusters(
                     clustering_data, min_clusters, max_clusters
                 )
 
-                # Run the selected algorithm
-                if algorithm == "kmeans":
-                    kmeans_labels = perform_kmeans(
-                        clustering_data, optimal_cluster_count
-                    )
-                    binary_access_matrix["k_means_clusters"] = kmeans_labels
+            logger.info(f"Optimal number of clusters: {optimal_cluster_count}")
 
-                elif algorithm == "hierarchical":
-                    hierarchical_labels = perform_hierarchical(
-                        clustering_data, optimal_cluster_count
-                    )
-                    binary_access_matrix["hierarchical_cluster"] = hierarchical_labels
-
-            # Run DBSCAN
-            elif algorithm == "dbscan":
-                dbscan_data = binary_access_matrix.values
-                k_distances = calculate_k_distance(dbscan_data, dbscan_min_samples)
-
-                if dbscan_eps is None:
-                    eps_estimated = detect_eps(k_distances)
-                    dbscan_eps = eps_estimated if eps_estimated else dbscan_eps
-                    mlflow.log_param("dbscan_eps_estimated", dbscan_eps)
-
-                dbscan_labels = perform_dbscan(
-                    dbscan_data, dbscan_eps, dbscan_min_samples
+            # Run the selected algorithm
+            if algorithm == "kmeans":
+                kmeans_labels = perform_kmeans(
+                    clustering_data,
+                    optimal_cluster_count,
+                    random_state=random_state,
+                    n_init=kmeans_n_init,
+                    max_iter=kmeans_max_iter,
                 )
-                binary_access_matrix["dbscan_cluster"] = dbscan_labels
+                binary_access_matrix["k_means_clusters"] = kmeans_labels
 
-            # Extract and store clustering results
-            CLUSTERING_RESULTS[run_id] = extract_cluster_details(
-                binary_access_matrix, algorithm
+            elif algorithm == "hierarchical":
+                hierarchical_labels = perform_hierarchical(
+                    clustering_data,
+                    optimal_cluster_count,
+                    linkage=hierarchical_linkage,
+                    metric=hierarchical_metric,
+                )
+                binary_access_matrix["hierarchical_cluster"] = hierarchical_labels
+
+        # Run DBSCAN
+        elif algorithm == "dbscan":
+            dbscan_data = binary_access_matrix.values
+
+            # If dbscan_eps is not provided, estimate it
+            if dbscan_eps is None:
+                k_distances = calculate_k_distance(dbscan_data, dbscan_min_samples)
+                dbscan_eps = detect_eps(k_distances)
+                if dbscan_eps is None:
+                    error_msg = "Failed to estimate dbscan_eps."
+                    logger.error(error_msg)
+                    RUN_STATUS[run_id] = "failed"
+                    raise ValueError(error_msg)
+                logger.info(f"Estimated dbscan_eps: {dbscan_eps}")
+
+            dbscan_labels = perform_dbscan(
+                dbscan_data,
+                dbscan_eps,
+                dbscan_min_samples,
+                metric=dbscan_metric,
+                algorithm=dbscan_algorithm,
             )
-            RUN_STATUS[run_id] = "completed"
-            logger.info(f"Clustering run {run_id} completed successfully.")
+            binary_access_matrix["dbscan_cluster"] = dbscan_labels
 
-    except Exception as e:
+        # Extract and store clustering results
+        CLUSTERING_RESULTS[run_id] = extract_cluster_details(
+            binary_access_matrix, algorithm
+        )
+        RUN_STATUS[run_id] = "completed"
+        logger.info(f"Clustering run {run_id} completed successfully.")
+
+    except Exception:
         logger.error("An error occurred in run_pipeline:", exc_info=True)
-        mlflow.log_param("run_pipeline_error", str(e))
         RUN_STATUS[run_id] = "failed"
         raise
 
