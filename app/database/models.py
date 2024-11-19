@@ -1,10 +1,32 @@
 from dotenv import load_dotenv
-from sqlalchemy import Column, String, Text, Integer, BigInteger, ForeignKey, TIMESTAMP
+from sqlalchemy import (
+    Column,
+    String,
+    Text,
+    Integer,
+    BigInteger,
+    ForeignKey,
+    TIMESTAMP,
+    JSON,
+    DateTime,
+)
 from sqlalchemy.orm import relationship
 from app.database.db_base import Base
 import os
 
 load_dotenv()
+
+
+class ClusteringRun(Base):
+    __tablename__ = "clustering_runs"
+    __table_args__ = {"schema": os.getenv("DB_NAME")}
+
+    run_id = Column(String(36), primary_key=True)
+    status = Column(String(20), nullable=False)
+    algorithm = Column(String(20))
+    results = Column(JSON)
+    started_at = Column(DateTime(timezone=True))
+    finished_at = Column(DateTime(timezone=True))
 
 
 class UserRolesMapping(Base):

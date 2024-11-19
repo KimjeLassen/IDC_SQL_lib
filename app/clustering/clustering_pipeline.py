@@ -10,14 +10,13 @@ from app.clustering.data_manipulation.data_manipulation import (
     find_optimal_clusters,
 )
 import uuid
+from app.database.models import ClusteringRun
+from datetime import datetime, timezone
+
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Dictionaries to store clustering results and statuses
-CLUSTERING_RESULTS = {}
-RUN_STATUS = {}
 
 
 def get_available_algorithms():
@@ -26,6 +25,7 @@ def get_available_algorithms():
 
 
 def run_pipeline(
+    db,
     df,
     algorithm,
     n_clusters=None,
@@ -49,14 +49,32 @@ def run_pipeline(
     if run_id is None:
         run_id = str(uuid.uuid4())
 
+    # Retrieve the ClusteringRun record
+    clustering_run = db.query(ClusteringRun).filter_by(run_id=run_id).first()
+    if not clustering_run:
+        # Should not happen, but handle it
+        clustering_run = ClusteringRun(
+            run_id=run_id,
+            status="running",
+            algorithm=algorithm,
+            started_at=datetime.now(timezone.utc),
+        )
+        db.add(clustering_run)
+        db.commit()
+    else:
+        # Update status to 'running'
+        clustering_run.status = "running"
+        clustering_run.started_at = datetime.now(timezone.utc)
+        db.commit()
+
     required_columns = {"user_id", "system_role_name"}
     if not required_columns.issubset(df.columns):
         error_msg = f"Input DataFrame must contain columns: {required_columns}"
         logger.error(error_msg)
-        RUN_STATUS[run_id] = "failed"
+        clustering_run.status = "failed"
+        clustering_run.finished_at = datetime.now(timezone.utc)
+        db.commit()
         raise ValueError(error_msg)
-
-    RUN_STATUS[run_id] = "running"
 
     try:
         logger.info("Starting clustering pipeline...")
@@ -149,7 +167,9 @@ def run_pipeline(
                 if dbscan_eps is None:
                     error_msg = "Failed to estimate dbscan_eps."
                     logger.error(error_msg)
-                    RUN_STATUS[run_id] = "failed"
+                    clustering_run.status = "failed"
+                    clustering_run.finished_at = datetime.now(timezone.utc)
+                    db.commit()
                     raise ValueError(error_msg)
                 logger.info(f"Estimated dbscan_eps: {dbscan_eps}")
 
@@ -163,15 +183,20 @@ def run_pipeline(
             binary_access_matrix["dbscan_cluster"] = dbscan_labels
 
         # Extract and store clustering results
-        CLUSTERING_RESULTS[run_id] = extract_cluster_details(
-            binary_access_matrix, algorithm
-        )
-        RUN_STATUS[run_id] = "completed"
+        results = extract_cluster_details(binary_access_matrix, algorithm)
+
+        # Update the ClusteringRun record with results and status
+        clustering_run.results = results
+        clustering_run.status = "completed"
+        clustering_run.finished_at = datetime.now(timezone.utc)
+        db.commit()
         logger.info(f"Clustering run {run_id} completed successfully.")
 
     except Exception:
         logger.error("An error occurred in run_pipeline:", exc_info=True)
-        RUN_STATUS[run_id] = "failed"
+        clustering_run.status = "failed"
+        clustering_run.finished_at = datetime.now(timezone.utc)
+        db.commit()
         raise
 
 
@@ -208,14 +233,11 @@ def extract_cluster_details(binary_access_matrix, algorithm):
         role_columns = binary_access_matrix.columns.difference([label_column])
         role_details = cluster_data[role_columns].sum().to_dict()
 
+        # Convert any NumPy data types to native Python types
+        role_details = {key: int(value) for key, value in role_details.items()}
+
         cluster_details.append(
             {"cluster_label": label, "user_ids": user_ids, "role_details": role_details}
         )
 
-    # Removed dendrogram generation for hierarchical clustering
     return cluster_details
-
-
-def get_clustering_results(run_id):
-    """Retrieve clustering results for a given run_id."""
-    return CLUSTERING_RESULTS.get(run_id, [])

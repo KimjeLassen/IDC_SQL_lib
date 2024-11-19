@@ -7,14 +7,15 @@ import uuid
 import logging
 from app.database.db_base import get_db
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone
+from app.database.models import ClusteringRun
+from app.database.db_base import SessionLocal
 
 
 from app.database.fetch_data import fetch_data
 from app.clustering.clustering_pipeline import (
     run_pipeline,
     get_available_algorithms,
-    get_clustering_results,
-    RUN_STATUS,
 )
 
 # Set up logging
@@ -22,9 +23,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-# app/api/clustering.py
 
 
 class ClusteringRequest(BaseModel):
@@ -197,8 +195,12 @@ def run_clustering(
     # Generate a unique run ID
     run_id = str(uuid.uuid4())
 
-    # Initialize status as pending
-    RUN_STATUS[run_id] = "pending"
+    # Create ClusteringRun record with status 'pending'
+    clustering_run = ClusteringRun(
+        run_id=run_id, status="pending", algorithm=request.algorithm
+    )
+    db.add(clustering_run)
+    db.commit()
 
     # Prepare additional parameters
     clustering_params = request.model_dump()
@@ -216,28 +218,49 @@ def execute_clustering(**kwargs):
     Wrapper function to execute the clustering pipeline and store results.
     """
     run_id = kwargs.get("run_id")
+    db = SessionLocal()
     try:
-        RUN_STATUS[run_id] = "running"
-        run_pipeline(**kwargs)
+        # Update the run status in the database to 'running'
+        clustering_run = db.query(ClusteringRun).filter_by(run_id=run_id).first()
+        if clustering_run:
+            clustering_run.status = "running"
+            clustering_run.started_at = datetime.now(timezone.utc)
+            db.commit()
+        else:
+            # Should not happen, but handle it
+            clustering_run = ClusteringRun(
+                run_id=run_id,
+                status="running",
+                algorithm=kwargs.get("algorithm"),
+                started_at=datetime.now(timezone.utc),
+            )
+            db.add(clustering_run)
+            db.commit()
+
+        # Call run_pipeline
+        run_pipeline(db=db, **kwargs)
     except Exception as e:
         logger.error(f"Clustering run {run_id} failed: {e}")
-        RUN_STATUS[run_id] = "failed"
+        # Update the run status in the database
+        clustering_run = db.query(ClusteringRun).filter_by(run_id=run_id).first()
+        if clustering_run:
+            clustering_run.status = "failed"
+            clustering_run.finished_at = datetime.now(timezone.utc)
+            db.commit()
+    finally:
+        db.close()
 
 
 @router.get("/results/{run_id}", response_model=ClusteringResultResponse)
-def get_results(run_id: str):
+def get_results(run_id: str, db: Session = Depends(get_db)):
     """
     Retrieve clustering results for a given run ID.
     """
-    if run_id not in RUN_STATUS:
+    clustering_run = db.query(ClusteringRun).filter_by(run_id=run_id).first()
+    if not clustering_run:
         raise HTTPException(status_code=404, detail="Run ID not found.")
 
-    status = RUN_STATUS[run_id]
+    status = clustering_run.status
+    results = clustering_run.results
 
-    if status == "completed":
-        clusters = get_clustering_results(run_id)
-        return ClusteringResultResponse(clusters=clusters, run_id=run_id, status=status)
-    elif status in ["running", "pending"]:
-        return ClusteringResultResponse(clusters=None, run_id=run_id, status=status)
-    else:
-        return ClusteringResultResponse(clusters=None, run_id=run_id, status=status)
+    return ClusteringResultResponse(clusters=results, run_id=run_id, status=status)
