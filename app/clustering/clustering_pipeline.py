@@ -19,6 +19,7 @@ from app.clustering.enums import (
     DBSCANMetric,
     DBSCANAlgorithm,
 )
+from sqlalchemy.orm import Session
 
 
 # Set up logging
@@ -32,14 +33,12 @@ def get_available_algorithms():
 
 
 def run_pipeline(
-    db,
+    db: Session,
     df,
     algorithm,
     n_clusters=None,
     min_clusters=3,
     max_clusters=8,
-    sample_fraction=0.1,
-    max_sample_size=500,
     dbscan_eps=None,
     dbscan_min_samples=5,
     random_state=42,
@@ -57,9 +56,51 @@ def run_pipeline(
         run_id = str(uuid.uuid4())
 
     # Retrieve the ClusteringRun record
+    clustering_run = get_or_create_clustering_run(db, run_id, algorithm)
+
+    try:
+        logger.info("Starting clustering pipeline...")
+
+        # Prepare data
+        binary_access_matrix = transform_to_binary_matrix(df)
+
+        # Select and run the appropriate clustering algorithm
+        clustering_results = select_and_run_algorithm(
+            algorithm,
+            binary_access_matrix,
+            n_clusters,
+            min_clusters,
+            max_clusters,
+            random_state,
+            kmeans_n_init,
+            kmeans_max_iter,
+            hierarchical_linkage,
+            hierarchical_metric,
+            dbscan_eps,
+            dbscan_min_samples,
+            dbscan_metric,
+            dbscan_algorithm,
+            clustering_run,
+        )
+
+        # Extract and store clustering results
+        results = extract_cluster_details(clustering_results, algorithm)
+
+        # Update the ClusteringRun record with results and status
+        update_clustering_run_success(db, clustering_run, results, run_id)
+
+    except Exception:
+        logger.error("An error occurred in run_pipeline:", exc_info=True)
+        update_clustering_run_failure(db, clustering_run)
+        raise
+
+
+def get_or_create_clustering_run(
+    db: Session, run_id: str, algorithm: str
+) -> ClusteringRun:
+    """Retrieve or create a ClusteringRun record."""
     clustering_run = db.query(ClusteringRun).filter_by(run_id=run_id).first()
     if not clustering_run:
-        # Should not happen, but handle it
         clustering_run = ClusteringRun(
             run_id=run_id,
             status="running",
@@ -73,152 +114,175 @@ def run_pipeline(
         clustering_run.status = "running"
         clustering_run.started_at = datetime.now(timezone.utc)
         db.commit()
+    return clustering_run
 
-    required_columns = {"user_id", "system_role_name"}
-    if not required_columns.issubset(df.columns):
-        error_msg = f"Input DataFrame must contain columns: {required_columns}"
-        logger.error(error_msg)
-        clustering_run.status = "failed"
-        clustering_run.finished_at = datetime.now(timezone.utc)
-        db.commit()
-        raise ValueError(error_msg)
 
-    try:
-        logger.info("Starting clustering pipeline...")
-        params = {
-            "algorithm": algorithm,
-            "random_state": random_state,
-            "sample_fraction": sample_fraction,
-            "max_sample_size": max_sample_size,
-        }
+def select_and_run_algorithm(
+    algorithm: str,
+    binary_access_matrix,
+    n_clusters,
+    min_clusters,
+    max_clusters,
+    random_state,
+    kmeans_n_init,
+    kmeans_max_iter,
+    hierarchical_linkage,
+    hierarchical_metric,
+    dbscan_eps,
+    dbscan_min_samples,
+    dbscan_metric,
+    dbscan_algorithm,
+    clustering_run: ClusteringRun,
+):
+    """Select and run the appropriate clustering algorithm."""
+    if algorithm in ["kmeans", "hierarchical"]:
+        # Apply TF-IDF transformation
+        tfidf_transformer = TfidfTransformer()
+        tfidf_matrix = tfidf_transformer.fit_transform(binary_access_matrix)
+        clustering_data = tfidf_matrix.toarray()
+
+        # Determine the number of clusters
+        optimal_cluster_count = determine_cluster_count(
+            clustering_data, n_clusters, min_clusters, max_clusters, algorithm
+        )
+
+        logger.info(f"Optimal number of clusters: {optimal_cluster_count}")
+
         if algorithm == "kmeans":
-            params.update(
-                {
-                    "n_clusters": n_clusters,
-                    "min_clusters": min_clusters,
-                    "max_clusters": max_clusters,
-                    "kmeans_n_init": kmeans_n_init,
-                    "kmeans_max_iter": kmeans_max_iter,
-                }
+            labels = run_kmeans_clustering(
+                clustering_data,
+                optimal_cluster_count,
+                random_state,
+                kmeans_n_init,
+                kmeans_max_iter,
             )
-        elif algorithm == "hierarchical":
-            params.update(
-                {
-                    "n_clusters": n_clusters,
-                    "min_clusters": min_clusters,
-                    "max_clusters": max_clusters,
-                    "hierarchical_linkage": hierarchical_linkage,
-                    "hierarchical_metric": hierarchical_metric,
-                }
+            binary_access_matrix["cluster_label"] = labels
+        else:
+            labels = run_hierarchical_clustering(
+                clustering_data,
+                optimal_cluster_count,
+                hierarchical_linkage,
+                hierarchical_metric,
             )
-        elif algorithm == "dbscan":
-            params.update(
-                {
-                    "dbscan_eps": dbscan_eps,
-                    "dbscan_min_samples": dbscan_min_samples,
-                    "dbscan_metric": dbscan_metric,
-                    "dbscan_algorithm": dbscan_algorithm,
-                }
-            )
+            binary_access_matrix["cluster_label"] = labels
 
-        logger.info(f"Clustering parameters: {params}")
+    elif algorithm == "dbscan":
+        labels = run_dbscan_clustering(
+            binary_access_matrix,
+            dbscan_eps,
+            dbscan_min_samples,
+            dbscan_metric,
+            dbscan_algorithm,
+            clustering_run,
+        )
+        binary_access_matrix["cluster_label"] = labels
 
-        # Transform data to binary access matrix
-        binary_access_matrix = transform_to_binary_matrix(df)
+    else:
+        raise ValueError(f"Unsupported algorithm: {algorithm}")
 
-        # Apply TF-IDF transformation for K-Means and Hierarchical Clustering
-        if algorithm in ["kmeans", "hierarchical"]:
-            tfidf_transformer = TfidfTransformer()
-            tfidf_matrix = tfidf_transformer.fit_transform(binary_access_matrix)
-            clustering_data = tfidf_matrix.toarray()
+    return binary_access_matrix
 
-            # Determine the number of clusters
-            if n_clusters is not None:
-                optimal_cluster_count = n_clusters
-            else:
-                # Determine the optimal number of clusters
-                optimal_cluster_count = find_optimal_clusters(
-                    clustering_data, min_clusters, max_clusters
-                )
 
-            logger.info(f"Optimal number of clusters: {optimal_cluster_count}")
+def determine_cluster_count(data, n_clusters, min_clusters, max_clusters):
+    """Determine the optimal number of clusters."""
+    if n_clusters is not None:
+        return n_clusters
+    else:
+        # Determine the optimal number of clusters
+        optimal_cluster_count = find_optimal_clusters(data, min_clusters, max_clusters)
+        return optimal_cluster_count
 
-            # Run the selected algorithm
-            if algorithm == "kmeans":
-                kmeans_labels = perform_kmeans(
-                    clustering_data,
-                    optimal_cluster_count,
-                    random_state=random_state,
-                    n_init=kmeans_n_init,
-                    max_iter=kmeans_max_iter,
-                )
-                binary_access_matrix["k_means_clusters"] = kmeans_labels
 
-            elif algorithm == "hierarchical":
-                hierarchical_labels = perform_hierarchical(
-                    clustering_data,
-                    optimal_cluster_count,
-                    linkage=hierarchical_linkage.value,
-                    metric=hierarchical_metric.value,
-                )
-                binary_access_matrix["hierarchical_cluster"] = hierarchical_labels
+def run_kmeans_clustering(
+    data,
+    n_clusters,
+    random_state,
+    n_init,
+    max_iter,
+):
+    """Run K-Means clustering."""
+    logger.info("Running K-Means clustering...")
+    labels = perform_kmeans(
+        data,
+        n_clusters,
+        random_state=random_state,
+        n_init=n_init,
+        max_iter=max_iter,
+    )
+    return labels
 
-        # Run DBSCAN
-        elif algorithm == "dbscan":
-            dbscan_data = binary_access_matrix.values
 
-            # If dbscan_eps is not provided, estimate it
-            if dbscan_eps is None:
-                k_distances = calculate_k_distance(dbscan_data, dbscan_min_samples)
-                dbscan_eps = detect_eps(k_distances)
-                if dbscan_eps is None:
-                    error_msg = "Failed to estimate dbscan_eps."
-                    logger.error(error_msg)
-                    clustering_run.status = "failed"
-                    clustering_run.finished_at = datetime.now(timezone.utc)
-                    db.commit()
-                    raise ValueError(error_msg)
-                logger.info(f"Estimated dbscan_eps: {dbscan_eps}")
+def run_hierarchical_clustering(
+    data,
+    n_clusters,
+    linkage,
+    metric,
+):
+    """Run Hierarchical clustering."""
+    logger.info("Running Hierarchical clustering...")
+    labels = perform_hierarchical(
+        data,
+        n_clusters,
+        linkage=linkage.value,
+        metric=metric.value,
+    )
+    return labels
 
-            dbscan_labels = perform_dbscan(
-                dbscan_data,
-                dbscan_eps,
-                dbscan_min_samples,
-                metric=dbscan_metric.value,
-                algorithm=dbscan_algorithm.value,
-            )
-            binary_access_matrix["dbscan_cluster"] = dbscan_labels
 
-        # Extract and store clustering results
-        results = extract_cluster_details(binary_access_matrix, algorithm)
+def run_dbscan_clustering(
+    binary_access_matrix,
+    dbscan_eps,
+    dbscan_min_samples,
+    dbscan_metric,
+    dbscan_algorithm,
+):
+    """Run DBSCAN clustering."""
+    logger.info("Running DBSCAN clustering...")
+    data = binary_access_matrix.values
 
-        # Update the ClusteringRun record with results and status
-        clustering_run.results = results
-        clustering_run.status = "completed"
-        clustering_run.finished_at = datetime.now(timezone.utc)
-        db.commit()
-        logger.info(f"Clustering run {run_id} completed successfully.")
+    # If dbscan_eps is not provided, estimate it
+    if dbscan_eps is None:
+        k_distances = calculate_k_distance(data, dbscan_min_samples)
+        dbscan_eps = detect_eps(k_distances)
+        if dbscan_eps is None:
+            error_msg = "Failed to estimate dbscan_eps."
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        logger.info(f"Estimated dbscan_eps: {dbscan_eps}")
 
-    except Exception:
-        logger.error("An error occurred in run_pipeline:", exc_info=True)
-        clustering_run.status = "failed"
-        clustering_run.finished_at = datetime.now(timezone.utc)
-        db.commit()
-        raise
+    labels = perform_dbscan(
+        data,
+        dbscan_eps,
+        dbscan_min_samples,
+        metric=dbscan_metric.value,
+        algorithm=dbscan_algorithm.value,
+    )
+    return labels
+
+
+def update_clustering_run_success(
+    db: Session, clustering_run: ClusteringRun, results, run_id: str
+):
+    """Update the ClusteringRun record upon success."""
+    clustering_run.results = results
+    clustering_run.status = "completed"
+    clustering_run.finished_at = datetime.now(timezone.utc)
+    db.commit()
+    logger.info(f"Clustering run {run_id} completed successfully.")
+
+
+def update_clustering_run_failure(db: Session, clustering_run: ClusteringRun):
+    """Update the ClusteringRun record upon failure."""
+    clustering_run.status = "failed"
+    clustering_run.finished_at = datetime.now(timezone.utc)
+    db.commit()
 
 
 def extract_cluster_details(binary_access_matrix, algorithm):
     """
     Extract cluster details to be returned by the API.
     """
-    # Define the cluster label column based on the algorithm
-    cluster_label_columns = {
-        "kmeans": "k_means_clusters",
-        "hierarchical": "hierarchical_cluster",
-        "dbscan": "dbscan_cluster",
-    }
-
-    label_column = cluster_label_columns.get(algorithm)
+    label_column = "cluster_label"
     if label_column not in binary_access_matrix.columns:
         logger.error(
             f"Cluster label column '{label_column}' not found in binary_access_matrix."
