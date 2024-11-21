@@ -1,5 +1,4 @@
 # app/api/clustering.py
-
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel, model_validator
 from typing import List, Optional, Literal
@@ -10,7 +9,12 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from app.database.models import ClusteringRun
 from app.database.db_base import SessionLocal
-
+from app.clustering.enums import (
+    HierarchicalLinkage,
+    HierarchicalMetric,
+    DBSCANMetric,
+    DBSCANAlgorithm,
+)
 
 from app.database.fetch_data import fetch_data
 from app.clustering.clustering_pipeline import (
@@ -29,117 +33,76 @@ class ClusteringRequest(BaseModel):
     algorithm: Literal["kmeans", "hierarchical", "dbscan"]
 
     # Common parameters
-    random_state: Optional[int] = 42
+    random_state: int = 42
 
     # Parameters for K-Means and Hierarchical
-    n_clusters: Optional[int] = None  # User can specify or leave it None
-    min_clusters: Optional[int] = 3
-    max_clusters: Optional[int] = 8
+    n_clusters: Optional[int] = None
+    min_clusters: int = 3
+    max_clusters: int = 8
 
     # Parameters specific to K-Means
-    kmeans_n_init: Optional[int] = 10
-    kmeans_max_iter: Optional[int] = 300
+    kmeans_n_init: int = 10
+    kmeans_max_iter: int = 300
 
     # Parameters specific to Hierarchical Clustering
-    hierarchical_linkage: Optional[str] = "ward"
-    hierarchical_metric: Optional[str] = "euclidean"
+    hierarchical_linkage: HierarchicalLinkage = HierarchicalLinkage.ward
+    hierarchical_metric: HierarchicalMetric = HierarchicalMetric.euclidean
 
     # Parameters specific to DBSCAN
-    dbscan_eps: Optional[float] = None  # User can specify or leave it None
-    dbscan_min_samples: Optional[int] = 5
-    dbscan_metric: Optional[str] = "euclidean"
-    dbscan_algorithm: Optional[str] = "auto"
+    dbscan_eps: Optional[float] = None
+    dbscan_min_samples: int = 5
+    dbscan_metric: DBSCANMetric = DBSCANMetric.euclidean
+    dbscan_algorithm: DBSCANAlgorithm = DBSCANAlgorithm.auto
 
-    @model_validator(mode="before")
-    def check_parameters(cls, values):
-        algorithm = values.get("algorithm")
+    @model_validator(mode="after")
+    def check_parameters(cls, model):
+        algorithm = model.algorithm
 
         if algorithm == "kmeans":
-            # Ensure K-Means specific parameters are valid
-            if values.get("n_clusters") is not None:
-                if values["n_clusters"] <= 0:
-                    raise ValueError("`n_clusters` must be a positive integer.")
-            else:
-                # If n_clusters is not provided, min_clusters and max_clusters must be valid
-                min_clusters = values.get("min_clusters", 3)
-                max_clusters = values.get("max_clusters", 8)
-                if (
-                    min_clusters <= 0
-                    or max_clusters <= 0
-                    or min_clusters > max_clusters
-                ):
-                    raise ValueError(
-                        "`min_clusters` and `max_clusters` must be positive integers, and `min_clusters` <= `max_clusters`."
-                    )
-
-            if values.get("kmeans_n_init") is not None and values["kmeans_n_init"] <= 0:
-                raise ValueError("`kmeans_n_init` must be a positive integer.")
-            if (
-                values.get("kmeans_max_iter") is not None
-                and values["kmeans_max_iter"] <= 0
-            ):
-                raise ValueError("`kmeans_max_iter` must be a positive integer.")
+            # K-Means specific validations
+            n_clusters = model.n_clusters
+            min_clusters = model.min_clusters
+            max_clusters = model.max_clusters
+            if n_clusters is not None and n_clusters <= 0:
+                raise ValueError("`n_clusters` must be a positive integer.")
+            if min_clusters <= 0 or max_clusters <= 0 or min_clusters > max_clusters:
+                raise ValueError(
+                    "`min_clusters` and `max_clusters` must be positive integers, and `min_clusters` <= `max_clusters`."
+                )
 
         elif algorithm == "hierarchical":
-            # Ensure Hierarchical Clustering parameters are valid
-            if values.get("n_clusters") is not None:
-                if values["n_clusters"] <= 0:
-                    raise ValueError("`n_clusters` must be a positive integer.")
-            else:
-                # If n_clusters is not provided, min_clusters and max_clusters must be valid
-                min_clusters = values.get("min_clusters", 3)
-                max_clusters = values.get("max_clusters", 8)
-                if (
-                    min_clusters <= 0
-                    or max_clusters <= 0
-                    or min_clusters > max_clusters
-                ):
-                    raise ValueError(
-                        "`min_clusters` and `max_clusters` must be positive integers, and `min_clusters` <= `max_clusters`."
-                    )
+            linkage = model.hierarchical_linkage
+            metric = model.hierarchical_metric
 
-            linkage_options = ["ward", "complete", "average", "single"]
-            if values.get("hierarchical_linkage") not in linkage_options:
-                raise ValueError(
-                    f"`hierarchical_linkage` must be one of {linkage_options}."
-                )
-            metric_options = [
-                "euclidean",
-                "l1",
-                "l2",
-                "manhattan",
-                "cosine",
-                "precomputed",
-            ]
-            if values.get("hierarchical_affinity") not in metric_options:
-                raise ValueError(
-                    f"`hierarchical_affinity` must be one of {metric_options}."
-                )
-            # For 'ward' linkage, 'affinity' must be 'euclidean'
             if (
-                values["hierarchical_linkage"] == "ward"
-                and values["hierarchical_metric"] != "euclidean"
+                linkage == HierarchicalLinkage.ward
+                and metric != HierarchicalMetric.euclidean
             ):
                 raise ValueError(
                     "When `hierarchical_linkage` is 'ward', `hierarchical_metric` must be 'euclidean'."
                 )
 
-        elif algorithm == "dbscan":
-            # Ensure DBSCAN specific parameters are valid
-            if values.get("dbscan_eps") is not None:
-                if values["dbscan_eps"] <= 0:
-                    raise ValueError("`dbscan_eps` must be a positive float.")
-            # dbscan_min_samples must be positive
-            if (
-                values.get("dbscan_min_samples") is not None
-                and values["dbscan_min_samples"] <= 0
-            ):
-                raise ValueError("`dbscan_min_samples` must be a positive integer.")
-            # Validate 'dbscan_metric' and 'dbscan_algorithm' if needed
-        else:
-            raise ValueError("Invalid algorithm selected.")
+            # Validate cluster numbers as in K-Means
+            n_clusters = model.n_clusters
+            min_clusters = model.min_clusters
+            max_clusters = model.max_clusters
+            if n_clusters is not None and n_clusters <= 0:
+                raise ValueError("`n_clusters` must be a positive integer.")
+            if min_clusters <= 0 or max_clusters <= 0 or min_clusters > max_clusters:
+                raise ValueError(
+                    "`min_clusters` and `max_clusters` must be positive integers, and `min_clusters` <= `max_clusters`."
+                )
 
-        return values
+        elif algorithm == "dbscan":
+            dbscan_eps = model.dbscan_eps
+            dbscan_min_samples = model.dbscan_min_samples
+
+            if dbscan_eps is not None and dbscan_eps <= 0:
+                raise ValueError("`dbscan_eps` must be a positive float.")
+            if dbscan_min_samples <= 0:
+                raise ValueError("`dbscan_min_samples` must be a positive integer.")
+
+        return model
 
 
 class ClusteringResponse(BaseModel):
@@ -170,6 +133,19 @@ def list_available_algorithms():
     """
     algorithms = get_available_algorithms()
     return AlgorithmListResponse(algorithms=algorithms)
+
+
+@router.get("/parameters")
+def get_algorithm_parameters():
+    """
+    Get the possible values for clustering algorithm parameters.
+    """
+    return {
+        "hierarchical_linkage_options": [e.value for e in HierarchicalLinkage],
+        "hierarchical_metric_options": [e.value for e in HierarchicalMetric],
+        "dbscan_metric_options": [e.value for e in DBSCANMetric],
+        "dbscan_algorithm_options": [e.value for e in DBSCANAlgorithm],
+    }
 
 
 @router.post("/run", response_model=ClusteringResponse)

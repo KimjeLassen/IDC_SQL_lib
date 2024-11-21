@@ -1,3 +1,4 @@
+# app/data_manipulation/clustering_pipeline
 import logging
 from sklearn.feature_extraction.text import TfidfTransformer
 from app.clustering.data_manipulation.data_manipulation import (
@@ -12,6 +13,12 @@ from app.clustering.data_manipulation.data_manipulation import (
 import uuid
 from app.database.models import ClusteringRun
 from datetime import datetime, timezone
+from app.clustering.enums import (
+    HierarchicalLinkage,
+    HierarchicalMetric,
+    DBSCANMetric,
+    DBSCANAlgorithm,
+)
 
 
 # Set up logging
@@ -38,10 +45,10 @@ def run_pipeline(
     random_state=42,
     kmeans_n_init=10,
     kmeans_max_iter=300,
-    hierarchical_linkage="ward",
-    hierarchical_metric="euclidean",
-    dbscan_metric="euclidean",
-    dbscan_algorithm="auto",
+    hierarchical_linkage: HierarchicalLinkage = HierarchicalLinkage.ward,
+    hierarchical_metric: HierarchicalMetric = HierarchicalMetric.euclidean,
+    dbscan_metric: DBSCANMetric = DBSCANMetric.euclidean,
+    dbscan_algorithm: DBSCANAlgorithm = DBSCANAlgorithm.auto,
     run_id=None,
 ):
     """Execute the clustering pipeline and store results."""
@@ -151,8 +158,8 @@ def run_pipeline(
                 hierarchical_labels = perform_hierarchical(
                     clustering_data,
                     optimal_cluster_count,
-                    linkage=hierarchical_linkage,
-                    metric=hierarchical_metric,
+                    linkage=hierarchical_linkage.value,
+                    metric=hierarchical_metric.value,
                 )
                 binary_access_matrix["hierarchical_cluster"] = hierarchical_labels
 
@@ -177,8 +184,8 @@ def run_pipeline(
                 dbscan_data,
                 dbscan_eps,
                 dbscan_min_samples,
-                metric=dbscan_metric,
-                algorithm=dbscan_algorithm,
+                metric=dbscan_metric.value,
+                algorithm=dbscan_algorithm.value,
             )
             binary_access_matrix["dbscan_cluster"] = dbscan_labels
 
