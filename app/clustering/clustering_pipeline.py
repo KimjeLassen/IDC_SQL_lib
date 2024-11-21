@@ -142,9 +142,27 @@ def select_and_run_algorithm(
         clustering_data = tfidf_matrix.toarray()
 
         # Determine the number of clusters
-        optimal_cluster_count = determine_cluster_count(
-            clustering_data, n_clusters, min_clusters, max_clusters, algorithm
-        )
+        if algorithm == "kmeans":
+            optimal_cluster_count = determine_cluster_count(
+                clustering_data,
+                n_clusters,
+                min_clusters,
+                max_clusters,
+                algorithm,
+                random_state=random_state,
+                n_init=kmeans_n_init,
+                max_iter=kmeans_max_iter,
+            )
+        elif algorithm == "hierarchical":
+            optimal_cluster_count = determine_cluster_count(
+                clustering_data,
+                n_clusters,
+                min_clusters,
+                max_clusters,
+                algorithm,
+                linkage=hierarchical_linkage.value,
+                metric=hierarchical_metric.value,
+            )
 
         logger.info(f"Optimal number of clusters: {optimal_cluster_count}")
 
@@ -173,7 +191,6 @@ def select_and_run_algorithm(
             dbscan_min_samples,
             dbscan_metric,
             dbscan_algorithm,
-            clustering_run,
         )
         binary_access_matrix["cluster_label"] = labels
 
@@ -183,13 +200,17 @@ def select_and_run_algorithm(
     return binary_access_matrix
 
 
-def determine_cluster_count(data, n_clusters, min_clusters, max_clusters):
+def determine_cluster_count(
+    data, n_clusters, min_clusters, max_clusters, algorithm, **kwargs
+):
     """Determine the optimal number of clusters."""
     if n_clusters is not None:
         return n_clusters
     else:
         # Determine the optimal number of clusters
-        optimal_cluster_count = find_optimal_clusters(data, min_clusters, max_clusters)
+        optimal_cluster_count = find_optimal_clusters(
+            data, min_clusters, max_clusters, algorithm=algorithm, **kwargs
+        )
         return optimal_cluster_count
 
 

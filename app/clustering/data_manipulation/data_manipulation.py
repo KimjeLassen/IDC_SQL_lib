@@ -47,18 +47,33 @@ def detect_eps(k_distances):
         return None
 
 
-def find_optimal_clusters(data, min_clusters, max_clusters):
-    """
-    Determine the optimal number of clusters for K-Means using the silhouette score.
-    """
+def find_optimal_clusters(
+    data, min_clusters, max_clusters, algorithm="kmeans", **kwargs
+):
     highest_silhouette_score = -1
     optimal_n_clusters = min_clusters
 
     for n_clusters in range(min_clusters, max_clusters + 1):
         try:
-            # Initialize and fit the K-Means model
-            kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-            cluster_labels = kmeans.fit_predict(data)
+            if algorithm == "kmeans":
+                model = KMeans(
+                    n_clusters=n_clusters,
+                    random_state=kwargs.get("random_state", 42),
+                    n_init=kwargs.get("n_init", 10),
+                    max_iter=kwargs.get("max_iter", 300),
+                )
+            elif algorithm == "hierarchical":
+                linkage = kwargs.get("linkage", "ward")
+                metric = kwargs.get("metric", "euclidean")
+                model = AgglomerativeClustering(
+                    n_clusters=n_clusters,
+                    linkage=linkage,
+                    metric=metric,
+                )
+            else:
+                raise ValueError(f"Unsupported algorithm: {algorithm}")
+
+            cluster_labels = model.fit_predict(data)
 
             # Calculate the silhouette score for the current number of clusters
             silhouette_avg = silhouette_score(data, cluster_labels)
@@ -70,13 +85,13 @@ def find_optimal_clusters(data, min_clusters, max_clusters):
         except Exception:
             # Log any errors encountered during the process
             logger.error(
-                f"An error occurred while finding optimal clusters for n_clusters={n_clusters}:",
+                f"An error occurred while finding optimal clusters for n_clusters={n_clusters} with algorithm={algorithm}:",
                 exc_info=True,
             )
 
     # Log the optimal number of clusters and the highest silhouette score
     logger.info(
-        f"\nThe optimal number of clusters is: {optimal_n_clusters} with a K-Means silhouette score of {highest_silhouette_score}"
+        f"The optimal number of clusters is: {optimal_n_clusters} with a {algorithm} silhouette score of {highest_silhouette_score}"
     )
 
     return optimal_n_clusters
