@@ -1,4 +1,4 @@
-# app/clustering/enums.py
+# app/clustering/enums/enums.py
 
 from enum import Enum
 

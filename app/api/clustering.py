@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from app.database.models import ClusteringRun
 from app.database.db_base import SessionLocal
-from app.clustering.enums import (
+from app.clustering.enums.enums import (
     HierarchicalLinkage,
     HierarchicalMetric,
     DBSCANMetric,

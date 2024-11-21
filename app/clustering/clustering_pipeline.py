@@ -1,4 +1,4 @@
-# app/data_manipulation/clustering_pipeline
+# app/clustering/clustering_pipeline
 import logging
 from sklearn.feature_extraction.text import TfidfTransformer
 from app.clustering.data_manipulation.data_manipulation import (
@@ -13,7 +13,7 @@ from app.clustering.data_manipulation.data_manipulation import (
 import uuid
 from app.database.models import ClusteringRun
 from datetime import datetime, timezone
-from app.clustering.enums import (
+from app.clustering.enums.enums import (
     HierarchicalLinkage,
     HierarchicalMetric,
     DBSCANMetric,
