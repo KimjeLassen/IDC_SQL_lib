@@ -10,12 +10,15 @@ from sqlalchemy import (
     TIMESTAMP,
     JSON,
     DateTime,
+    Boolean,
 )
 from sqlalchemy.orm import relationship
 from app.database.db_base import Base
 import os
 
 load_dotenv()
+
+DEFAULT_IT_SYSTEM_ID = "00000000-0000-0000-0000-default000000"
 
 
 class ClusteringRun(Base):
@@ -30,20 +33,53 @@ class ClusteringRun(Base):
     finished_at = Column(DateTime(timezone=True))
 
 
+class UserRoles(Base):
+    __tablename__ = "user_roles"
+    __table_args__ = {"schema": os.getenv("DB_NAME")}
+
+    id = Column(String(36), primary_key=True)
+    name = Column(String(255))
+    identifier = Column(String(128))
+    description = Column(Text)
+    it_system_id = Column(String(36), default=DEFAULT_IT_SYSTEM_ID, nullable=False)
+    user_only = Column(Boolean, default=False)
+    ou_inherit_allowed = Column(Boolean, default=False)
+    delegated_from_cvr = Column(String(8), nullable=True)
+    last_updated_by = Column(String(64), nullable=True)
+    last_updated = Column(TIMESTAMP)
+    created_by = Column(String(64))
+    created = Column(TIMESTAMP)
+    bitmap = Column(Integer, default=0)
+
+    # Relationship to UserRolesMapping
+    user_roles_mappings = relationship(
+        "UserRolesMapping", back_populates="role_candidate"
+    )
+
+
 class UserRolesMapping(Base):
     __tablename__ = "user_roles_mapping"
     __table_args__ = {"schema": os.getenv("DB_NAME")}
 
     user_role_id = Column(String(36), primary_key=True)
     user_id = Column(String(36), nullable=False)
-    user_metadata = Column("metadata", Text)
 
-    # Relationship to SystemRoleAssignments
+    # New Foreign Key to UserRoles
+    role_candidate_id = Column(
+        String(36),
+        ForeignKey(f"{os.getenv('DB_NAME')}.user_roles.id"),
+        nullable=True,
+    )
+
+    # Relationships
     system_role_assignments = relationship(
         "SystemRoleAssignments",
-        back_populates="user_role",
+        back_populates="user_role_mapping",
         cascade="all, delete-orphan",
     )
+
+    # Relationship to UserRoles
+    role_candidate = relationship("UserRoles", back_populates="user_roles_mappings")
 
 
 class SystemRoleAssignments(Base):
@@ -64,7 +100,7 @@ class SystemRoleAssignments(Base):
     created = Column(TIMESTAMP)
 
     # Relationships
-    user_role = relationship(
+    user_role_mapping = relationship(
         "UserRolesMapping", back_populates="system_role_assignments"
     )
     system_role = relationship("SystemRoles", back_populates="assignments")

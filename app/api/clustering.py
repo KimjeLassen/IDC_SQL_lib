@@ -1,13 +1,20 @@
 # app/api/clustering.py
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, model_validator, Field
 from typing import List, Optional, Literal
 import uuid
 import logging
 from app.database.db_base import get_db
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
-from app.database.models import ClusteringRun
+from app.database.models import (
+    ClusteringRun,
+    UserRoles as UserRolesModel,
+    UserRolesMapping as UserRolesMappingModel,
+    SystemRoleAssignments as SystemRoleAssignmentsModel,
+    SystemRoles as SystemRolesModel,
+)
+
 from app.database.db_base import SessionLocal
 from app.clustering.enums.enums import (
     HierarchicalLinkage,
@@ -21,6 +28,7 @@ from app.clustering.clustering_pipeline import (
     run_pipeline,
     get_available_algorithms,
 )
+from app.database.models import DEFAULT_IT_SYSTEM_ID
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -124,6 +132,27 @@ class ClusteringResultResponse(BaseModel):
     clusters: Optional[List[ClusterContent]]
     run_id: str
     status: str
+
+
+# Define the Pydantic models here
+class UserRoleCreate(BaseModel):
+    run_id: str = Field(..., description="The ID of the clustering run")
+    cluster_label: str = Field(..., description="The label of the cluster")
+    name: str = Field(..., example="Role Candidate 1")
+    identifier: str = Field(..., example="role_candidate_1")
+    description: Optional[str] = Field(
+        None, example="This role represents users in cluster 1"
+    )
+    created_by: str = Field(..., example="admin_user")
+
+
+class UserRoleResponse(BaseModel):
+    id: str
+    name: str
+    identifier: str
+    description: Optional[str]
+    created_by: str
+    created: datetime
 
 
 @router.get("/algorithms", response_model=AlgorithmListResponse)
@@ -240,3 +269,117 @@ def get_results(run_id: str, db: Session = Depends(get_db)):
     results = clustering_run.results
 
     return ClusteringResultResponse(clusters=results, run_id=run_id, status=status)
+
+
+@router.post("/create_user_role", response_model=UserRoleResponse)
+def create_user_role_from_cluster(
+    user_role_data: UserRoleCreate,
+    db: Session = Depends(get_db),
+    auto_assign_users: bool = True,  # Flag to control user mapping
+):
+    run_id = user_role_data.run_id
+    cluster_label = user_role_data.cluster_label
+
+    # Retrieve the clustering run
+    clustering_run = db.query(ClusteringRun).filter_by(run_id=run_id).first()
+    if not clustering_run:
+        raise HTTPException(status_code=404, detail="Run ID not found.")
+
+    if clustering_run.status != "completed":
+        raise HTTPException(
+            status_code=400, detail="Clustering run is not completed yet."
+        )
+
+    # Find the specified cluster
+    cluster = next(
+        (c for c in clustering_run.results if c["cluster_label"] == cluster_label), None
+    )
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster label not found.")
+
+    try:
+        # Step 1: Create the new user role
+        new_user_role = UserRolesModel(
+            id=str(uuid.uuid4()),
+            name=user_role_data.name,
+            identifier=user_role_data.identifier,
+            description=user_role_data.description,
+            created_by=user_role_data.created_by,
+            created=datetime.now(timezone.utc),
+            last_updated=datetime.now(timezone.utc),
+            it_system_id=DEFAULT_IT_SYSTEM_ID,  # Default value
+            user_only=False,
+            ou_inherit_allowed=False,
+            delegated_from_cvr=None,
+            last_updated_by=None,
+            bitmap=0,
+        )
+        db.add(new_user_role)
+        db.flush()  # Ensure ID is available and pushed to the session
+        db.refresh(new_user_role)  # Ensure it's in the current session
+
+        # Explicitly commit the user role creation to satisfy FK constraints
+        db.commit()
+
+        # Step 2: Filter system roles with non-zero user count
+        role_details = cluster["role_details"]
+        filtered_system_role_names = [
+            role for role, count in role_details.items() if count > 0
+        ]
+
+        system_roles = (
+            db.query(SystemRolesModel)
+            .filter(SystemRolesModel.name.in_(filtered_system_role_names))
+            .all()
+        )
+        if not system_roles:
+            logger.warning("No system roles with users found for the cluster.")
+            system_roles = []
+
+        # Step 3: Associate the user_role with relevant system_roles
+        for system_role in system_roles:
+            assignment = SystemRoleAssignmentsModel(
+                user_role_id=new_user_role.id,
+                system_role_id=system_role.id,
+                created=datetime.now(timezone.utc),
+            )
+            db.add(assignment)
+
+        # Step 4: Optionally map users to the new user_role
+        if auto_assign_users:
+            user_ids = cluster.get("user_ids", [])
+            if not user_ids:
+                logger.warning("No user IDs found for the cluster.")
+
+            for user_id in user_ids:
+                new_mapping = UserRolesMappingModel(
+                    user_role_id=new_user_role.id,
+                    user_id=user_id,
+                    role_candidate_id=new_user_role.id,
+                )
+                db.add(new_mapping)
+
+        # Commit all subsequent changes
+        db.commit()
+
+        # Verify that the new user role was saved to the database
+        saved_role = db.query(UserRolesModel).filter_by(id=new_user_role.id).first()
+        if not saved_role:
+            raise HTTPException(status_code=500, detail="Failed to save user role.")
+
+    except Exception as e:
+        logger.error(f"Transaction failed: {e}")
+        db.rollback()  # Explicit rollback for the session
+        raise HTTPException(
+            status_code=500, detail="Transaction failed, changes rolled back."
+        )
+
+    # Return only if the role is confirmed to be saved
+    return UserRoleResponse(
+        id=new_user_role.id,
+        name=new_user_role.name,
+        identifier=new_user_role.identifier,
+        description=new_user_role.description,
+        created_by=user_role_data.created_by,
+        created=new_user_role.created,
+    )
