@@ -1,5 +1,5 @@
 # app/api/clustering.py
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Query
 from pydantic import BaseModel, model_validator, Field
 from typing import List, Optional, Literal
 import uuid
@@ -275,7 +275,7 @@ def get_results(run_id: str, db: Session = Depends(get_db)):
 def create_user_role_from_cluster(
     user_role_data: UserRoleCreate,
     db: Session = Depends(get_db),
-    auto_assign_users: bool = True,  # Flag to control user mapping
+    auto_assign_users: bool = Query(True),
 ):
     run_id = user_role_data.run_id
     cluster_label = user_role_data.cluster_label
