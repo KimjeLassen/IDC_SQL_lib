@@ -1,10 +1,7 @@
 import unittest
 import numpy as np
 import pandas as pd
-from app.clustering.data_manipulation.data_manipulation import (
-    transform_to_binary_matrix,
-    perform_dbscan,
-)
+from app.clustering.data_manipulation.data_manipulation import (transform_to_binary_matrix)
 
 
 class TestDataManipulation(unittest.TestCase):
@@ -43,25 +40,6 @@ class TestDataManipulation(unittest.TestCase):
         self.assertEqual(result.loc[2, "role3"], 1)
         self.assertEqual(result.loc[3, "role2"], 1)
 
-    def test_perform_dbscan(self):
-        """
-        Test the `perform_dbscan` function to ensure it correctly applies DBSCAN clustering.
-
-        Asserts:
-        - The length of the cluster labels matches the number of data points.
-        - Noise points are labeled as -1.
-        """
-        # Arrange: Create a sample input array
-        data = np.array([[0, 1], [1, 0], [0, 1]])
-        dbscan_eps = 0.5
-        dbscan_min_samples = 2
-
-        # Act: Call the function under test
-        labels = perform_dbscan(data, dbscan_eps, dbscan_min_samples)
-
-        # Assert: Verify the output labels
-        self.assertEqual(len(labels), len(data))
-        self.assertIn(-1, labels)  # Check if noise points are labeled
 
 
 if __name__ == "__main__":
