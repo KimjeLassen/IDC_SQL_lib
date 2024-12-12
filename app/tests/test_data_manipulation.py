@@ -7,9 +7,7 @@ from app.clustering.data_manipulation.data_manipulation import (transform_to_bin
 class TestDataManipulation(unittest.TestCase):
     """
     Unit tests for data manipulation functions used in clustering.
-    This test suite covers transformation to binary matrices, KMeans and hierarchical clustering,
-    and DBSCAN clustering.
-    """
+    This test suite covers transformation to binary matrices"""
 
     def test_transform_to_binary_matrix(self):
         """
